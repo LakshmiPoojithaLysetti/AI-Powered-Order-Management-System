@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Copilot – AI Workflow Assistant</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link href="style.css" rel="stylesheet" />
+</head>
+<body>
+  <div class="app">
+    <!-- Header -->
+    <header class="header">
+      <div class="header-content">
+        <div class="header-title">
+          <h1>🔧Copilot</h1>
+          <p class="subtitle">AI-Powered Order Management • Fastener Search • Policy Assistant</p>
+        </div>
+        <div class="header-controls">
+          <div class="status-indicators">
+            <div class="status-item" id="neo4jStatus" title="Neo4j Connection Status">
+              <span class="status-dot" id="neo4jDot"></span>
+              <span class="status-label">Neo4j</span>
+            </div>
+          </div>
+          <div class="control-group">
+            <label for="channel">Channel:</label>
+            <select id="channel" class="channel-select">
+              <option value="chat" selected>💬 Chat</option>
+              <option value="email">📧 Email</option>
+            </select>
+          </div>
+          <button id="settingsBtn" class="icon-btn" title="System Settings" aria-label="Settings">
+            ⚙️
+          </button>
+          <button id="clearBtn" class="icon-btn" title="Clear conversation" aria-label="Clear">
+            🗑️
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <div class="main-container">
+      <!-- System Management Sidebar -->
+      <aside class="system-panel" id="systemPanel">
+        <div class="panel-header">
+          <h3>🔧 System Management</h3>
+          <button class="toggle-btn" id="panelToggle" title="Toggle panel">✕</button>
+        </div>
+        
+        <div class="panel-content">
+          <!-- Neo4j Section -->
+          <section class="panel-section">
+            <h4 class="section-title">
+              <span class="section-icon">🗄️</span>
+              Neo4j Database
+            </h4>
+            
+            <div class="status-card" id="neo4jStatusCard">
+              <div class="status-card-header">
+                <span class="status-label">Connection Status</span>
+                <span class="status-badge" id="neo4jStatusBadge">Checking...</span>
+              </div>
+              <div class="status-details" id="neo4jDetails">
+                <p>Verifying connection...</p>
+              </div>
+            </div>
+            
+            <div class="action-card">
+              <h5>Data Management</h5>
+              <div class="action-buttons">
+                <button class="action-btn primary" id="loadDataBtn">
+                  <span class="btn-icon">📥</span>
+                  <span class="btn-label">Load Order Data</span>
+                </button>
+                <button class="action-btn secondary" id="clearDataBtn">
+                  <span class="btn-icon">🗑️</span>
+                  <span class="btn-label">Clear & Reload</span>
+                </button>
+              </div>
+              <div class="action-info">
+                <p class="info-text">Loads embedded order data from <code>neo4j_module.py</code></p>
+              </div>
+            </div>
+            
+            <div class="loading-status" id="loadingStatus" style="display: none;">
+              <div class="loading-spinner"></div>
+              <p class="loading-text">Loading data...</p>
+              <div class="loading-progress" id="loadingProgress"></div>
+            </div>
+          </section>
+          
+          <!-- Workflow Section -->
+          <section class="panel-section">
+            <h4 class="section-title">
+              <span class="section-icon">⚙️</span>
+              Workflow
+            </h4>
+            <div class="info-card">
+              <p>Workflow orchestration from <code>workflow.json</code></p>
+              <div class="workflow-info">
+                <span class="info-item">Mode: <strong id="workflowMode">Auto</strong></span>
+              </div>
+            </div>
+          </section>
+        </div>
+      </aside>
+      
+      <!-- Chat Container -->
+      <main class="chat-container" id="chat">
+        <div class="empty-state" id="emptyState">
+          <div class="empty-icon">💬</div>
+          <h2>Welcome to Innovator Copilot</h2>
+          <p>Ask about orders, search for fasteners, or get policy information.</p>
+          <div class="empty-suggestions">
+            <p>Try asking:</p>
+            <ul>
+              <li>"Check order status for order 12345"</li>
+              <li>"Show me PEM self-clinching standoffs"</li>
+              <li>"What is your return policy?"</li>
+            </ul>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer">
+      <div class="quick-actions">
+        <button class="quick-btn" data-action="order" title="Check order status">
+          <span class="quick-icon">📦</span>
+          <span class="quick-label">Order Status</span>
+        </button>
+        <button class="quick-btn" data-action="track" title="Track an order">
+          <span class="quick-icon">🚚</span>
+          <span class="quick-label">Track Order</span>
+        </button>
+        <button class="quick-btn" data-action="fastener" title="Search fasteners">
+          <span class="quick-icon">🔩</span>
+          <span class="quick-label">Fastener Search</span>
+        </button>
+        <button class="quick-btn" data-action="policy" title="Ask policy questions">
+          <span class="quick-icon">📋</span>
+          <span class="quick-label">Policy Question</span>
+        </button>
+      </div>
+      <div class="input-container">
+        <input 
+          id="msg" 
+          type="text"
+          placeholder="Ask about orders, search fasteners, or ask policy questions..." 
+          autocomplete="off"
+          aria-label="Message input"
+        />
+        <button id="send" class="send-btn" aria-label="Send message">
+          <span class="send-icon">➤</span>
+        </button>
+      </div>
+    </footer>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

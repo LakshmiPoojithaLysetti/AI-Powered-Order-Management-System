@@ -1,0 +1,499 @@
+{
+  "id": 1762408066447,
+  "title": "Test Agent",
+  "description": "Agent to test all task types in the workflow.",
+  "color": "#06b6d4",
+  "sampleQuestions": [
+    "Question 1"
+  ],
+  "stateSchema": [
+    {
+      "parameterName": "param 1",
+      "parameterType": "String",
+      "defaultValue": "abcd"
+    },
+    {
+      "parameterName": "param 2",
+      "parameterType": "Integer",
+      "defaultValue": "11"
+    },
+    {
+      "parameterName": "param3",
+      "parameterType": "Float",
+      "defaultValue": "1.5"
+    },
+    {
+      "parameterName": "param4",
+      "parameterType": "String",
+      "defaultValue": "asdfsdafsd"
+    },
+    {
+      "parameterName": "param5",
+      "parameterType": "String",
+      "defaultValue": "asdfds"
+    }
+  ],
+  "agentType": "Conversational",
+  "plannerType": "Manual",
+  "executionContext": "User",
+  "StartActivityId": "1",
+  "Diagram": {
+    "viewport": {
+      "x": 247.00000000000023,
+      "y": 424.20000000000005,
+      "zoom": 0.9999999999999999
+    }
+  },
+  "WorkflowActivities": [
+    {
+      "Id": "1",
+      "Name": "Start",
+      "Type": "Start",
+      "Diagram": {
+        "xCoordinate": -51,
+        "yCoordinate": 26.5,
+        "nodeWidth": 100,
+        "nodeHeight": 62
+      },
+      "Properties": []
+    },
+    {
+      "Id": "2",
+      "Name": "UserTask1",
+      "Type": "UserTaskActivity",
+      "Diagram": {
+        "xCoordinate": 149,
+        "yCoordinate": 26.5,
+        "nodeWidth": 104,
+        "nodeHeight": 62
+      },
+      "Properties": [
+        {
+          "Name": "Name",
+          "Value": "UserTask1"
+        },
+        {
+          "Name": "Description",
+          "Value": ""
+        },
+        {
+          "Name": "BotUtterance",
+          "Value": ""
+        },
+        {
+          "Name": "Type",
+          "Value": ""
+        },
+        {
+          "Name": "Options",
+          "Value": []
+        },
+        {
+          "Name": "MapInputTo",
+          "Value": ""
+        },
+        {
+          "Name": "activityType",
+          "Value": "User Task"
+        },
+        {
+          "Name": "activityId",
+          "Value": "9C4A991D-F068-4C0D-B061-E494A65BD40A"
+        }
+      ]
+    },
+    {
+      "Id": "3",
+      "Name": "RetrievalTask1",
+      "Type": "RetrievalTaskActivity",
+      "Diagram": {
+        "xCoordinate": 349.5,
+        "yCoordinate": 26.5,
+        "nodeWidth": 127,
+        "nodeHeight": 62
+      },
+      "Properties": [
+        {
+          "Name": "Name",
+          "Value": "RetrievalTask1"
+        },
+        {
+          "Name": "Description",
+          "Value": ""
+        },
+        {
+          "Name": "BotUtterance",
+          "Value": ""
+        },
+        {
+          "Name": "ParameterizedQuery",
+          "Value": ""
+        },
+        {
+          "Name": "MapResultsTo",
+          "Value": ""
+        },
+        {
+          "Name": "activityType",
+          "Value": "Retrieval Task"
+        },
+        {
+          "Name": "activityId",
+          "Value": "RETRIEVAL-TASK-UUID-PLACEHOLDER"
+        }
+      ]
+    },
+    {
+      "Id": "4",
+      "Name": "LLMTask1",
+      "Type": "LLMTaskActivity",
+      "Diagram": {
+        "xCoordinate": 582,
+        "yCoordinate": 26.5,
+        "nodeWidth": 103,
+        "nodeHeight": 62
+      },
+      "Properties": [
+        {
+          "Name": "Name",
+          "Value": "LLMTask1"
+        },
+        {
+          "Name": "Description",
+          "Value": ""
+        },
+        {
+          "Name": "BotUtterance",
+          "Value": ""
+        },
+        {
+          "Name": "Instructions",
+          "Value": ""
+        },
+        {
+          "Name": "Model",
+          "Value": ""
+        },
+        {
+          "Name": "MapResponseTo",
+          "Value": ""
+        },
+        {
+          "Name": "activityType",
+          "Value": "LLM Task"
+        },
+        {
+          "Name": "activityId",
+          "Value": "C5563E88-CA49-475C-8D62-7E335C365305"
+        }
+      ]
+    },
+    {
+      "Id": "5",
+      "Name": "ToolTask1",
+      "Type": "ToolTaskActivity",
+      "Diagram": {
+        "xCoordinate": 782,
+        "yCoordinate": 26.5,
+        "nodeWidth": 103,
+        "nodeHeight": 62
+      },
+      "Properties": [
+        {
+          "Name": "Name",
+          "Value": "ToolTask1"
+        },
+        {
+          "Name": "Description",
+          "Value": ""
+        },
+        {
+          "Name": "BotUtterance",
+          "Value": ""
+        },
+        {
+          "Name": "Type",
+          "Value": ""
+        },
+        {
+          "Name": "Tool",
+          "Value": ""
+        },
+        {
+          "Name": "MCPServer",
+          "Value": ""
+        },
+        {
+          "Name": "activityType",
+          "Value": "Tool Task"
+        },
+        {
+          "Name": "activityId",
+          "Value": "3364A99E-167C-4753-885A-608A062AD256"
+        },
+        {
+          "Name": "inputMappings",
+          "Value": [
+            {
+              "InputParameter": "",
+              "StateParameter": ""
+            }
+          ]
+        },
+        {
+          "Name": "outputMappings",
+          "Value": [
+            {
+              "StateParameter": "",
+              "OutputParameter": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "Id": "6",
+      "Name": "RouterTask1",
+      "Type": "RouterTaskActivity",
+      "Diagram": {
+        "xCoordinate": 982,
+        "yCoordinate": 26.5,
+        "nodeWidth": 116,
+        "nodeHeight": 62
+      },
+      "Properties": [
+        {
+          "Name": "Name",
+          "Value": "RouterTask1"
+        },
+        {
+          "Name": "Description",
+          "Value": ""
+        },
+        {
+          "Name": "BotUtterance",
+          "Value": ""
+        },
+        {
+          "Name": "Type",
+          "Value": ""
+        },
+        {
+          "Name": "activityType",
+          "Value": "Router Task"
+        },
+        {
+          "Name": "activityId",
+          "Value": "4C58EE66-A623-442E-ADA7-3C4B7820F648"
+        },
+        {
+          "Name": "routingConditions",
+          "Value": [
+            {
+              "Variable": "",
+              "Type": "String",
+              "Operator": "equals",
+              "Value": "",
+              "Node": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "Id": "7",
+      "Name": "RenderTask1",
+      "Type": "RenderTaskActivity",
+      "Diagram": {
+        "xCoordinate": 1182,
+        "yCoordinate": 26.5,
+        "nodeWidth": 119,
+        "nodeHeight": 62
+      },
+      "Properties": [
+        {
+          "Name": "Name",
+          "Value": "RenderTask1"
+        },
+        {
+          "Name": "Description",
+          "Value": ""
+        },
+        {
+          "Name": "BotUtterance",
+          "Value": ""
+        },
+        {
+          "Name": "Type",
+          "Value": ""
+        },
+        {
+          "Name": "Widget",
+          "Value": ""
+        },
+        {
+          "Name": "PageURL",
+          "Value": ""
+        },
+        {
+          "Name": "PageLabel",
+          "Value": ""
+        },
+        {
+          "Name": "activityType",
+          "Value": "Render Task"
+        },
+        {
+          "Name": "activityId",
+          "Value": "RENDER-TASK-UUID-PLACEHOLDER"
+        },
+        {
+          "Name": "widgetInputMappings",
+          "Value": [
+            {
+              "StateVariable": "",
+              "InputParameter": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "Id": "8",
+      "Name": "AgentTask1",
+      "Type": "AgentTaskActivity",
+      "Diagram": {
+        "xCoordinate": 1189,
+        "yCoordinate": 166.29999999999998,
+        "nodeWidth": 113,
+        "nodeHeight": 62
+      },
+      "Properties": [
+        {
+          "Name": "Name",
+          "Value": "AgentTask1"
+        },
+        {
+          "Name": "Description",
+          "Value": ""
+        },
+        {
+          "Name": "BotUtterance",
+          "Value": ""
+        },
+        {
+          "Name": "PromptTemplate",
+          "Value": ""
+        },
+        {
+          "Name": "Type",
+          "Value": ""
+        },
+        {
+          "Name": "Agent",
+          "Value": ""
+        },
+        {
+          "Name": "AgentRegistry",
+          "Value": ""
+        },
+        {
+          "Name": "activityType",
+          "Value": "Agent Task"
+        },
+        {
+          "Name": "activityId",
+          "Value": "3C7DC436-78E6-4EA5-834F-62A8C9CA0CDA"
+        }
+      ]
+    },
+    {
+      "Id": "9",
+      "Name": "UserTask2",
+      "Type": "UserTaskActivity",
+      "Diagram": {
+        "xCoordinate": 779,
+        "yCoordinate": -137.20000000000007,
+        "nodeWidth": 106,
+        "nodeHeight": 62
+      },
+      "Properties": [
+        {
+          "Name": "Name",
+          "Value": "UserTask2"
+        },
+        {
+          "Name": "Description",
+          "Value": ""
+        },
+        {
+          "Name": "BotUtterance",
+          "Value": ""
+        },
+        {
+          "Name": "Type",
+          "Value": ""
+        },
+        {
+          "Name": "Options",
+          "Value": []
+        },
+        {
+          "Name": "MapInputTo",
+          "Value": ""
+        },
+        {
+          "Name": "ShowAsReverseTask",
+          "Value": true
+        },
+        {
+          "Name": "activityType",
+          "Value": "User Task"
+        },
+        {
+          "Name": "activityId",
+          "Value": "9C4A991D-F068-4C0D-B061-E494A65BD40A"
+        }
+      ]
+    }
+  ],
+  "WorkflowConnections": [
+    {
+      "SourceActivityId": "1",
+      "TargetActivityId": "2"
+    },
+    {
+      "SourceActivityId": "2",
+      "TargetActivityId": "3"
+    },
+    {
+      "SourceActivityId": "3",
+      "TargetActivityId": "4"
+    },
+    {
+      "SourceActivityId": "4",
+      "TargetActivityId": "5"
+    },
+    {
+      "SourceActivityId": "5",
+      "TargetActivityId": "6"
+    },
+    {
+      "SourceActivityId": "6",
+      "TargetActivityId": "7"
+    },
+    {
+      "SourceActivityId": "6",
+      "TargetActivityId": "8"
+    },
+    {
+      "SourceActivityId": "6",
+      "TargetActivityId": "9"
+    },
+    {
+      "SourceActivityId": "9",
+      "TargetActivityId": "4"
+    }
+  ],
+  "team": ""
+}
