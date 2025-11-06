@@ -10,7 +10,7 @@ from fastapi.responses import FileResponse  # type: ignore[import]
 from fastapi.middleware.cors import CORSMiddleware  # type: ignore[import]
 from pydantic import BaseModel
 from graph import build_graph, initial_state
-from neo4j_module import ensure_demo_docs, save_message, is_neo4j_available, seed_order_data_async
+from neo4j_module import ensure_demo_docs, save_message, is_neo4j_available, seed_order_data_async, get_embedded_order_data
 from langgraph.checkpoint.memory import MemorySaver  # type: ignore[import]
 
 load_dotenv(override=True)
@@ -38,6 +38,24 @@ from contextlib import asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
     await ensure_demo_docs()
+    # Check if order data exists, if not, load it
+    try:
+        from neo4j_module import async_with_session
+        def _check_orders(session):
+            result = session.run("MATCH (o:Order) RETURN count(o) AS count LIMIT 1")
+            record = result.single()
+            return record["count"] if record else 0
+        
+        order_count = await async_with_session(_check_orders)
+        if order_count == 0:
+            print("[startup] No orders found, loading order data...")
+            await seed_order_data_async(clear_existing=False, use_file=False)
+            print("[startup] Order data loaded successfully")
+        else:
+            print(f"[startup] Found {order_count} orders in database")
+    except Exception as e:
+        print(f"[startup] Warning: Could not check/load order data: {e}")
+        # Continue startup even if order data loading fails
     yield
     # Shutdown (if needed)
     pass
@@ -73,6 +91,7 @@ class ChatResponse(BaseModel):
     reviewMessage: Optional[str] = None
     isFastenerSearch: Optional[bool] = False
     parsed_query: Optional[str] = None
+    currentActivity: Optional[str] = None
 
 
 # API routes - must be defined before static file routes
@@ -319,6 +338,7 @@ async def chat_endpoint(req: ChatRequest):
         retrieved = safe_get("retrieved", [])
         parsed_query = safe_get("parsed_query")
         is_fastener_search = safe_get("isFastenerSearch", False)
+        current_activity = safe_get("current_activity")
         
         # Ensure retrieved is a list
         if not isinstance(retrieved, list):
@@ -341,7 +361,8 @@ async def chat_endpoint(req: ChatRequest):
                 "needsHumanReview": needs_review,
                 "reviewMessage": review_message,
                 "isFastenerSearch": is_fastener_search,
-                "parsed_query": parsed_query
+                "parsed_query": parsed_query,
+                "currentActivity": current_activity
             }
             
             # Check each value for coroutines and ensure they're JSON-serializable
@@ -446,6 +467,180 @@ class LoadDataRequest(BaseModel):
     clearExisting: bool = False
 
 
+@app.get("/api/workflow")
+async def get_workflow():
+    """Get workflow configuration from workflow.json"""
+    try:
+        workflow_path = BASE_DIR / "workflow.json"
+        if not workflow_path.exists():
+            raise HTTPException(status_code=404, detail="workflow.json not found")
+        
+        with open(workflow_path, "r", encoding="utf-8") as f:
+            workflow_data = json.load(f)
+        
+        return workflow_data
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error loading workflow: {str(e)}")
+
+
+@app.get("/api/order-data")
+async def get_order_data():
+    """Get structured order data from embedded data in neo4j_module.py"""
+    try:
+        data = get_embedded_order_data()
+        return {
+            "success": True,
+            "data": data,
+            "summary": {
+                "carriers": len(data["carriers"]),
+                "customers": len(data["customers"]),
+                "orders": len(data["orders"]),
+                "items": len(data["items"]),
+                "tracking_events": len(data["tracking_events"]),
+                "refunds": len(data["refunds"])
+            }
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error parsing order data: {str(e)}")
+
+
+@app.get("/api/orders")
+async def get_orders():
+    """Get list of all orders from Neo4j."""
+    try:
+        from neo4j_module import async_with_session, is_neo4j_available
+        
+        if not is_neo4j_available():
+            raise HTTPException(status_code=503, detail="Neo4j is not available")
+        
+        def _convert_date(value):
+            """Convert Neo4j date/datetime objects to strings."""
+            if value is None:
+                return None
+            try:
+                # Handle Neo4j date objects
+                if hasattr(value, 'to_native'):
+                    native = value.to_native()
+                    if hasattr(native, 'isoformat'):
+                        return native.isoformat()
+                    if hasattr(native, 'strftime'):
+                        return native.strftime('%Y-%m-%d')
+                    return str(native)
+                # Handle Neo4j date objects with iso_format method
+                if hasattr(value, 'iso_format'):
+                    result = value.iso_format()
+                    if isinstance(result, str) and 'T' in result:
+                        return result.split('T')[0]
+                    return result
+                # Handle Python date/datetime objects
+                if hasattr(value, 'isoformat'):
+                    result = value.isoformat()
+                    if isinstance(result, str) and 'T' in result:
+                        return result.split('T')[0]
+                    return result
+                if hasattr(value, 'strftime'):
+                    return value.strftime('%Y-%m-%d')
+                # If it's already a string, return as is
+                if isinstance(value, str):
+                    if 'T' in value:
+                        return value.split('T')[0]
+                    return value
+                return str(value)
+            except Exception as e:
+                print(f"[get_orders] Error converting date {type(value)}: {e}")
+                return str(value) if value else None
+        
+        def _work(session):
+            try:
+                # First check if any orders exist
+                count_result = session.run("MATCH (o:Order) RETURN count(o) AS count")
+                count_record = count_result.single()
+                order_count = count_record["count"] if count_record else 0
+                
+                if order_count == 0:
+                    print("[get_orders] No orders found in database")
+                    return []
+                
+                # Simplified query without complex ORDER BY
+                result = session.run(
+                    """
+                    MATCH (o:Order)
+                    OPTIONAL MATCH (o)-[:PLACED_BY]->(customer:Customer)
+                    RETURN o.id AS orderId,
+                           o.status AS status,
+                           o.orderDate AS orderDate,
+                           o.totalAmount AS totalAmount,
+                           o.tracking AS tracking,
+                           o.expectedDelivery AS expectedDelivery,
+                           customer.name AS customerName
+                    LIMIT 100
+                    """
+                )
+                orders = []
+                for record in result:
+                    try:
+                        order_date = _convert_date(record.get("orderDate"))
+                        expected_delivery = _convert_date(record.get("expectedDelivery"))
+                        
+                        total_amount = record.get("totalAmount")
+                        if total_amount is not None:
+                            try:
+                                total_amount = float(total_amount)
+                            except (ValueError, TypeError):
+                                total_amount = 0.0
+                        else:
+                            total_amount = 0.0
+                        
+                        orders.append({
+                            "orderId": record.get("orderId"),
+                            "status": record.get("status", "Unknown"),
+                            "orderDate": order_date,
+                            "totalAmount": total_amount,
+                            "tracking": record.get("tracking"),
+                            "expectedDelivery": expected_delivery,
+                            "customerName": record.get("customerName")
+                        })
+                    except Exception as e:
+                        print(f"[get_orders] Error processing record: {e}")
+                        import traceback
+                        traceback.print_exc()
+                        continue
+                
+                # Sort in Python instead of Cypher (most recent first)
+                def sort_key(order):
+                    order_date = order.get("orderDate")
+                    if order_date is None:
+                        return (1, "")  # None dates go last
+                    # Convert to string for comparison if not already
+                    date_str = str(order_date) if not isinstance(order_date, str) else order_date
+                    return (0, date_str)  # Valid dates go first, sorted by date string
+                
+                orders.sort(key=sort_key, reverse=True)
+                
+                return orders
+            except Exception as e:
+                print(f"[get_orders] Error in Neo4j query: {e}")
+                import traceback
+                traceback.print_exc()
+                raise
+        
+        try:
+            orders = await async_with_session(_work)
+            return {"orders": orders if orders else []}
+        except Exception as e:
+            print(f"[get_orders] Error in async_with_session: {e}")
+            import traceback
+            traceback.print_exc()
+            raise HTTPException(status_code=500, detail=f"Error loading orders: {str(e)}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[get_orders] Unexpected error: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error loading orders: {str(e)}")
+
+
 @app.post("/api/neo4j/load-data")
 async def load_neo4j_data(req: LoadDataRequest):
     """Load data from embedded order data in neo4j_module.py into Neo4j"""
@@ -527,6 +722,8 @@ if __name__ == "__main__":
     print(f"⚠️  Note: Do NOT use http://0.0.0.0:{port} in browser")
     print(f"\n📋 Available API Endpoints:")
     print(f"   - GET  /api/neo4j/status")
+    print(f"   - GET  /api/workflow")
+    print(f"   - GET  /api/order-data")
     print(f"   - POST /api/neo4j/load-data")
     print(f"   - POST /api/chat")
     print(f"{'='*60}\n")

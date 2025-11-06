@@ -1,4 +1,21 @@
 {
+  "_comments": {
+    "note": "JSON does not support native comments. This `_comments` section documents the config without breaking JSON parsers.",
+    "id": "Unique workflow identifier.",
+    "title": "Human-readable name for the agent/workflow.",
+    "description": "Short description of what this workflow does.",
+    "color": "Hex color used for UI representation.",
+    "sampleQuestions": "Seed prompts/questions shown to users.",
+    "stateSchema": "List of state variables (name, type, default).",
+    "agentType": "Agent mode; e.g., Conversational.",
+    "plannerType": "Planner selection; e.g., Manual or Automatic.",
+    "executionContext": "Who initiates actions; e.g., User or System.",
+    "StartActivityId": "Activity id where the graph starts.",
+    "Diagram": "Canvas/viewport metadata for editor positioning.",
+    "WorkflowActivities": "List of nodes (tasks) in the workflow graph.",
+    "WorkflowConnections": "Directed edges connecting activities by id.",
+    "team": "Optional team/owner for this workflow."
+  },
   "id": 1762408066447,
   "title": "Test Agent",
   "description": "Agent to test all task types in the workflow.",
@@ -55,7 +72,12 @@
         "nodeWidth": 100,
         "nodeHeight": 62
       },
-      "Properties": []
+      "Properties": [
+        {
+          "Name": "Description",
+          "Value": "HTTP request (REST/JSON) or chat message"
+        }
+      ]
     },
     {
       "Id": "2",
@@ -74,7 +96,7 @@
         },
         {
           "Name": "Description",
-          "Value": ""
+          "Value": "Intake & schema validation (Pydantic models)"
         },
         {
           "Name": "BotUtterance",
@@ -119,7 +141,7 @@
         },
         {
           "Name": "Description",
-          "Value": ""
+          "Value": "Read catalog/customer/inventory from DB or services"
         },
         {
           "Name": "BotUtterance",
@@ -160,7 +182,7 @@
         },
         {
           "Name": "Description",
-          "Value": ""
+          "Value": "Normalize/validate intent (free text → structured); placeholder function to plug your LLM"
         },
         {
           "Name": "BotUtterance",
@@ -205,7 +227,7 @@
         },
         {
           "Name": "Description",
-          "Value": ""
+          "Value": "Non-LLM deterministic tools (tax, shipping, coupon, fraud checks)"
         },
         {
           "Name": "BotUtterance",
@@ -268,7 +290,7 @@
         },
         {
           "Name": "Description",
-          "Value": ""
+          "Value": "Decide CREATE | UPDATE | CANCEL | QUOTE"
         },
         {
           "Name": "BotUtterance",
@@ -290,11 +312,32 @@
           "Name": "routingConditions",
           "Value": [
             {
-              "Variable": "",
+              "Variable": "intent",
               "Type": "String",
               "Operator": "equals",
-              "Value": "",
-              "Node": ""
+              "Value": "CREATE",
+              "Node": "AgentTask1"
+            },
+            {
+              "Variable": "intent",
+              "Type": "String",
+              "Operator": "equals",
+              "Value": "UPDATE",
+              "Node": "AgentTask1"
+            },
+            {
+              "Variable": "intent",
+              "Type": "String",
+              "Operator": "equals",
+              "Value": "CANCEL",
+              "Node": "UserTask2"
+            },
+            {
+              "Variable": "intent",
+              "Type": "String",
+              "Operator": "equals",
+              "Value": "QUOTE",
+              "Node": "RenderTask1"
             }
           ]
         }
@@ -317,7 +360,7 @@
         },
         {
           "Name": "Description",
-          "Value": ""
+          "Value": "Final response/confirmation object"
         },
         {
           "Name": "BotUtterance",
@@ -375,7 +418,7 @@
         },
         {
           "Name": "Description",
-          "Value": ""
+          "Value": "Orchestrate external systems (payment, inventory hold, shipping label); implemented as background tasks"
         },
         {
           "Name": "BotUtterance",
@@ -424,7 +467,7 @@
         },
         {
           "Name": "Description",
-          "Value": ""
+          "Value": "When required fields missing → return next_action: \"ASK_USER\" with questions"
         },
         {
           "Name": "BotUtterance",

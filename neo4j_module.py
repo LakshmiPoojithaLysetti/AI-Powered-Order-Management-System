@@ -2,7 +2,7 @@
 import os
 import re
 from pathlib import Path
-from typing import Optional, Callable, Any
+from typing import Optional, Callable, Any, Dict, List
 from neo4j import GraphDatabase
 from dotenv import load_dotenv
 
@@ -174,19 +174,19 @@ EMBEDDED_ORDER_DATA = """// Neo4j data seed file - Order Management System
 
 MERGE (ups:Carrier {name: "UPS"})
 SET ups.code = "UPS"
-SET ups.website = 'https://www.ups.com'
+SET ups.website = "https://www.ups.com"
 
 MERGE (fedex:Carrier {name: "FedEx"})
 SET fedex.code = "FDX"
-SET fedex.website = 'https://www.fedex.com'
+SET fedex.website = "https://www.fedex.com"
 
 MERGE (usps:Carrier {name: "USPS"})
 SET usps.code = "USPS"
-SET usps.website = 'https://www.usps.com'
+SET usps.website = "https://www.usps.com"
 
 MERGE (dhl:Carrier {name: "DHL"})
 SET dhl.code = "DHL"
-SET dhl.website = 'https://www.dhl.com'
+SET dhl.website = "https://www.dhl.com"
 
 // Create Customers
 
@@ -393,7 +393,317 @@ SET item6_1.quantity = 1
 SET item6_1.price = 79.99
 
 MERGE (order6)-[:HAS_ITEM]->(item6_1)
+
+
+// Additional Workflow Support Data -------------------------------------------------
+
+// Return Policy for RenderTask / UserTask2 messaging
+MERGE (policy:ReturnPolicy {id: "return-policy-default"})
+SET policy.description = "Items can be returned within 30 days of delivery if unused and in original packaging."
+SET policy.returnWindowDays = 30
+SET policy.restockingFee = 0.0
+SET policy.contactEmail = "returns@example.com"
+
+// Catalog / Inventory data for RetrievalTask1
+MERGE (prodA:Product {sku: "SKU-1001"})
+SET prodA.name = "High Torque Screwdriver Set"
+SET prodA.category = "Fasteners"
+SET prodA.price = 49.99
+SET prodA.currency = "USD"
+
+MERGE (prodB:Product {sku: "SKU-1002"})
+SET prodB.name = "Industrial Bolt Pack"
+SET prodB.category = "Fasteners"
+SET prodB.price = 29.99
+SET prodB.currency = "USD"
+
+MERGE (prodC:Product {sku: "SKU-1003"})
+SET prodC.name = "Heavy Duty Anchors"
+SET prodC.category = "Hardware"
+SET prodC.price = 19.99
+SET prodC.currency = "USD"
+
+MERGE (prodA)-[:HAS_INVENTORY]->(:Inventory {location: "WH-1", quantity: 150, reserved: 35})
+MERGE (prodB)-[:HAS_INVENTORY]->(:Inventory {location: "WH-2", quantity: 80, reserved: 10})
+MERGE (prodC)-[:HAS_INVENTORY]->(:Inventory {location: "WH-3", quantity: 200, reserved: 5})
+
+// Coupons / Discounts for ToolTask1 deterministic tools
+MERGE (coupon10:Coupon {code: "SAVE10"})
+SET coupon10.description = "10% off orders over $100"
+SET coupon10.discountType = "percentage"
+SET coupon10.discountValue = 10
+SET coupon10.minimumOrderAmount = 100
+SET coupon10.active = true
+
+MERGE (couponShip:Coupon {code: "FREESHIP"})
+SET couponShip.description = "Free standard shipping on any order"
+SET couponShip.discountType = "shipping"
+SET couponShip.discountValue = 0
+SET couponShip.active = true
+
+// Shipping methods for ToolTask1 calculations
+MERGE (shipStd:ShippingMethod {id: "standard"})
+SET shipStd.name = "Standard Ground"
+SET shipStd.baseRate = 7.99
+SET shipStd.deliveryEstimate = "3-5 business days"
+
+MERGE (shipExp:ShippingMethod {id: "express"})
+SET shipExp.name = "Express Air"
+SET shipExp.baseRate = 19.99
+SET shipExp.deliveryEstimate = "1-2 business days"
+
+// Tax rules for deterministic tax calculation
+MERGE (taxCA:TaxRate {region: "CA"})
+SET taxCA.rate = 0.0825
+SET taxCA.description = "California combined tax"
+
+MERGE (taxNY:TaxRate {region: "NY"})
+SET taxNY.rate = 0.08875
+SET taxNY.description = "New York combined tax"
+
+MERGE (taxDefault:TaxRate {region: "DEFAULT"})
+SET taxDefault.rate = 0.06
+SET taxDefault.description = "Fallback sales tax"
+
+// Fraud rules for ToolTask1 checks
+MERGE (fraudRule:FraudRule {id: "high_amount_manual"})
+SET fraudRule.description = "Orders over $500 require manual review"
+SET fraudRule.thresholdAmount = 500
+SET fraudRule.requiresManualReview = true
+
+// Payment processor accounts for AgentTask1 orchestration
+MERGE (paymentAcct:PaymentGateway {id: "stripe-main"})
+SET paymentAcct.provider = "Stripe"
+SET paymentAcct.merchantId = "acct_1234567890"
+SET paymentAcct.supports3DS = true
+
+// Shipping carrier accounts for AgentTask1 label generation
+MERGE (shippingAcct:ShippingAccount {id: "ups-account"})
+SET shippingAcct.carrier = "UPS"
+SET shippingAcct.accountNumber = "1AB234"
+SET shippingAcct.pickupWindow = "16:00-18:00"
+
+// Example background tasks for AgentTask1 reference
+MERGE (bgTaskPayment:BackgroundTask {id: "BG-PAYMENT-001"})
+SET bgTaskPayment.type = "payment_capture"
+SET bgTaskPayment.status = "completed"
+SET bgTaskPayment.details = "Captured $159.99 for order 22222 via Stripe"
+
+MERGE (bgTaskInventory:BackgroundTask {id: "BG-INVENTORY-001"})
+SET bgTaskInventory.type = "inventory_hold"
+SET bgTaskInventory.status = "completed"
+SET bgTaskInventory.details = "Reserved inventory for order 22222"
+
+MERGE (bgTaskShipping:BackgroundTask {id: "BG-SHIPPING-001"})
+SET bgTaskShipping.type = "shipping_label"
+SET bgTaskShipping.status = "queued"
+SET bgTaskShipping.details = "Awaiting label generation for order 67890"
+
+// Link background tasks to orders where applicable
+MERGE (order4)-[:HAS_BACKGROUND_TASK]->(bgTaskPayment)
+MERGE (order4)-[:HAS_BACKGROUND_TASK]->(bgTaskInventory)
+MERGE (order2)-[:HAS_BACKGROUND_TASK]->(bgTaskShipping)
 """
+
+
+# ============================================================================
+# Data Access Functions
+# ============================================================================
+
+def get_embedded_order_data() -> dict[str, Any]:
+    """
+    Parse and return structured data from EMBEDDED_ORDER_DATA.
+    
+    Returns:
+        Dictionary containing parsed carriers, customers, orders, items, tracking events, and refunds
+    """
+    import re
+    from datetime import datetime, date
+    
+    data = {
+        "carriers": [],
+        "customers": [],
+        "orders": [],
+        "items": [],
+        "tracking_events": [],
+        "refunds": []
+    }
+    
+    # Parse carriers
+    carrier_pattern = r'MERGE\s+\((\w+):Carrier\s+\{name:\s+"([^"]+)"\}\)'
+    carrier_set_pattern = r'SET\s+(\w+)\.(\w+)\s*=\s*["\']?([^"\']+)["\']?'
+    
+    carriers = {}
+    for match in re.finditer(carrier_pattern, EMBEDDED_ORDER_DATA):
+        var_name = match.group(1)
+        name = match.group(2)
+        carriers[var_name] = {"name": name}
+    
+    # Extract carrier properties
+    for match in re.finditer(carrier_set_pattern, EMBEDDED_ORDER_DATA):
+        var_name = match.group(1)
+        prop = match.group(2)
+        value = match.group(3)
+        if var_name in carriers:
+            carriers[var_name][prop] = value
+    
+    data["carriers"] = list(carriers.values())
+    
+    # Parse customers
+    customer_pattern = r'MERGE\s+\((\w+):Customer\s+\{id:\s+"([^"]+)"\}\)'
+    customer_set_pattern = r'SET\s+(\w+)\.(\w+)\s*=\s*["\']?([^"\']+)["\']?'
+    
+    customers = {}
+    for match in re.finditer(customer_pattern, EMBEDDED_ORDER_DATA):
+        var_name = match.group(1)
+        customer_id = match.group(2)
+        customers[var_name] = {"id": customer_id}
+    
+    # Extract customer properties
+    for match in re.finditer(customer_set_pattern, EMBEDDED_ORDER_DATA):
+        var_name = match.group(1)
+        prop = match.group(2)
+        value = match.group(3)
+        if var_name in customers:
+            customers[var_name][prop] = value
+    
+    data["customers"] = list(customers.values())
+    
+    # Parse orders
+    order_pattern = r'MERGE\s+\((\w+):Order\s+\{id:\s+"([^"]+)"\}\)'
+    order_set_pattern = r'SET\s+(\w+)\.(\w+)\s*=\s*([^"\n]+)'
+    
+    orders = {}
+    for match in re.finditer(order_pattern, EMBEDDED_ORDER_DATA):
+        var_name = match.group(1)
+        order_id = match.group(2)
+        orders[var_name] = {"id": order_id}
+    
+    # Extract order properties
+    for match in re.finditer(order_set_pattern, EMBEDDED_ORDER_DATA):
+        var_name = match.group(1)
+        prop = match.group(2)
+        value = match.group(3).strip().strip('"').strip("'")
+        if var_name in orders:
+            # Try to parse dates and numbers
+            if value.startswith('date(') or value.startswith('datetime('):
+                # Extract the date string
+                date_match = re.search(r'["\']([^"\']+)["\']', value)
+                if date_match:
+                    value = date_match.group(1)
+            elif value.replace('.', '').replace('-', '').isdigit():
+                try:
+                    if '.' in value:
+                        value = float(value)
+                    else:
+                        value = int(value)
+                except:
+                    pass
+            orders[var_name][prop] = value
+    
+    # Parse relationships to get customer and carrier for each order
+    order_customer_pattern = r'MERGE\s+\((\w+)\)-\[:PLACED_BY\]->\((\w+)\)'
+    order_carrier_pattern = r'MERGE\s+\((\w+)\)-\[:SHIPPED_BY\]->\((\w+)\)'
+    
+    for match in re.finditer(order_customer_pattern, EMBEDDED_ORDER_DATA):
+        order_var = match.group(1)
+        customer_var = match.group(2)
+        if order_var in orders and customer_var in customers:
+            orders[order_var]["customerId"] = customers[customer_var]["id"]
+    
+    for match in re.finditer(order_carrier_pattern, EMBEDDED_ORDER_DATA):
+        order_var = match.group(1)
+        carrier_var = match.group(2)
+        if order_var in orders and carrier_var in carriers:
+            orders[order_var]["carrierName"] = carriers[carrier_var]["name"]
+    
+    data["orders"] = list(orders.values())
+    
+    # Parse order items
+    item_pattern = r'MERGE\s+\((\w+):OrderItem\s+\{id:\s+"([^"]+)",\s*orderId:\s+"([^"]+)"\}\)'
+    item_set_pattern = r'SET\s+(\w+)\.(\w+)\s*=\s*([^"\n]+)'
+    
+    items = {}
+    for match in re.finditer(item_pattern, EMBEDDED_ORDER_DATA):
+        var_name = match.group(1)
+        item_id = match.group(2)
+        order_id = match.group(3)
+        items[var_name] = {"id": item_id, "orderId": order_id}
+    
+    # Extract item properties
+    for match in re.finditer(item_set_pattern, EMBEDDED_ORDER_DATA):
+        var_name = match.group(1)
+        prop = match.group(2)
+        value = match.group(3).strip().strip('"').strip("'")
+        if var_name in items:
+            # Try to parse numbers
+            if value.replace('.', '').isdigit():
+                try:
+                    if '.' in value:
+                        value = float(value)
+                    else:
+                        value = int(value)
+                except:
+                    pass
+            items[var_name][prop] = value
+    
+    data["items"] = list(items.values())
+    
+    # Parse tracking events
+    track_pattern = r'MERGE\s+\((\w+):TrackingEvent\s+\{orderId:\s+"([^"]+)",\s*date:\s*datetime\("([^"]+)"\)\}\)'
+    track_set_pattern = r'SET\s+(\w+)\.(\w+)\s*=\s*["\']?([^"\']+)["\']?'
+    
+    tracking = {}
+    for match in re.finditer(track_pattern, EMBEDDED_ORDER_DATA):
+        var_name = match.group(1)
+        order_id = match.group(2)
+        date_str = match.group(3)
+        tracking[var_name] = {"orderId": order_id, "date": date_str}
+    
+    # Extract tracking properties
+    for match in re.finditer(track_set_pattern, EMBEDDED_ORDER_DATA):
+        var_name = match.group(1)
+        prop = match.group(2)
+        value = match.group(3)
+        if var_name in tracking:
+            tracking[var_name][prop] = value
+    
+    data["tracking_events"] = list(tracking.values())
+    
+    # Parse refunds
+    refund_pattern = r'MERGE\s+\((\w+):Refund\s+\{id:\s+"([^"]+)"\}\)'
+    refund_set_pattern = r'SET\s+(\w+)\.(\w+)\s*=\s*([^"\n]+)'
+    
+    refunds = {}
+    for match in re.finditer(refund_pattern, EMBEDDED_ORDER_DATA):
+        var_name = match.group(1)
+        refund_id = match.group(2)
+        refunds[var_name] = {"id": refund_id}
+    
+    # Extract refund properties
+    for match in re.finditer(refund_set_pattern, EMBEDDED_ORDER_DATA):
+        var_name = match.group(1)
+        prop = match.group(2)
+        value = match.group(3).strip().strip('"').strip("'")
+        if var_name in refunds:
+            # Try to parse dates and numbers
+            if value.startswith('datetime('):
+                date_match = re.search(r'["\']([^"\']+)["\']', value)
+                if date_match:
+                    value = date_match.group(1)
+            elif value.replace('.', '').isdigit():
+                try:
+                    if '.' in value:
+                        value = float(value)
+                    else:
+                        value = int(value)
+                except:
+                    pass
+            refunds[var_name][prop] = value
+    
+    data["refunds"] = list(refunds.values())
+    
+    return data
 
 
 def parse_cypher_string(cypher_content: str) -> list[str]:
@@ -711,3 +1021,918 @@ async def seed_order_data_async(clear_existing: bool = False, use_file: bool = F
         return await load_cypher_data_async(path, clear_existing=clear_existing, use_embedded=False)
     else:
         return await load_cypher_data_async(None, clear_existing=clear_existing, use_embedded=True)
+
+
+# ============================================================================
+# Order Query Functions
+# ============================================================================
+
+async def get_order_status(order_id: str) -> Optional[Dict[str, Any]]:
+    """
+    Get the status of an order from Neo4j.
+    
+    Args:
+        order_id: Order ID to query
+    
+    Returns:
+        Dictionary with order status and basic info, or None if not found
+    """
+    if not driver:
+        raise RuntimeError("Neo4j driver is not initialized. Neo4j is required for this application.")
+    
+    def _work(session):
+        result = session.run(
+            """
+            MATCH (o:Order {id: $order_id})
+            RETURN o.status AS status, o.id AS orderId, o.orderDate AS orderDate
+            LIMIT 1
+            """,
+            {"order_id": order_id}
+        )
+        
+        record = result.single()
+        if not record:
+            return None
+        
+        status = record["status"]
+        order_date = record["orderDate"]
+        order_id_result = record["orderId"]
+        
+        # Convert date if needed
+        if order_date:
+            if hasattr(order_date, 'iso_format'):
+                order_date = order_date.iso_format()
+            elif hasattr(order_date, 'to_native'):
+                order_date = order_date.to_native().isoformat() if hasattr(order_date.to_native(), 'isoformat') else str(order_date)
+            elif hasattr(order_date, 'isoformat'):
+                order_date = order_date.isoformat()
+            else:
+                order_date = str(order_date)
+        
+        return {
+            "orderId": order_id_result,
+            "status": status,
+            "orderDate": order_date
+        }
+    
+    return await async_with_session(_work)
+
+
+async def get_order_purchase_date(order_id: str) -> Optional[Dict[str, Any]]:
+    """
+    Get the purchase date (orderDate) of an order from Neo4j.
+    
+    Args:
+        order_id: Order ID to query
+    
+    Returns:
+        Dictionary with order date and order ID, or None if not found
+    """
+    if not driver:
+        raise RuntimeError("Neo4j driver is not initialized. Neo4j is required for this application.")
+    
+    def _work(session):
+        result = session.run(
+            """
+            MATCH (o:Order {id: $order_id})
+            RETURN o.id AS orderId, o.orderDate AS orderDate, o.createdAt AS createdAt
+            LIMIT 1
+            """,
+            {"order_id": order_id}
+        )
+        
+        record = result.single()
+        if not record:
+            return None
+        
+        order_date = record["orderDate"]
+        created_at = record["createdAt"]
+        order_id_result = record["orderId"]
+        
+        # Convert dates if needed
+        def _convert_date(date_val):
+            if not date_val:
+                return None
+            if hasattr(date_val, 'iso_format'):
+                return date_val.iso_format()
+            elif hasattr(date_val, 'to_native'):
+                native = date_val.to_native()
+                if hasattr(native, 'isoformat'):
+                    return native.isoformat()
+                return str(native)
+            elif hasattr(date_val, 'isoformat'):
+                return date_val.isoformat()
+            return str(date_val)
+        
+        return {
+            "orderId": order_id_result,
+            "orderDate": _convert_date(order_date),
+            "createdAt": _convert_date(created_at)
+        }
+    
+    return await async_with_session(_work)
+
+
+async def get_order_expected_delivery(order_id: str) -> Optional[Dict[str, Any]]:
+    """
+    Get the expected delivery date of an order from Neo4j.
+    
+    Args:
+        order_id: Order ID to query
+    
+    Returns:
+        Dictionary with expected delivery date and order info, or None if not found
+    """
+    if not driver:
+        raise RuntimeError("Neo4j driver is not initialized. Neo4j is required for this application.")
+    
+    def _work(session):
+        result = session.run(
+            """
+            MATCH (o:Order {id: $order_id})
+            RETURN o.id AS orderId, 
+                   o.expectedDelivery AS expectedDelivery,
+                   o.orderDate AS orderDate,
+                   o.status AS status
+            LIMIT 1
+            """,
+            {"order_id": order_id}
+        )
+        
+        record = result.single()
+        if not record:
+            return None
+        
+        expected_delivery = record["expectedDelivery"]
+        order_date = record["orderDate"]
+        status = record["status"]
+        order_id_result = record["orderId"]
+        
+        # Convert dates if needed
+        def _convert_date(date_val):
+            if not date_val:
+                return None
+            if hasattr(date_val, 'iso_format'):
+                return date_val.iso_format()
+            elif hasattr(date_val, 'to_native'):
+                native = date_val.to_native()
+                if hasattr(native, 'isoformat'):
+                    return native.isoformat()
+                return str(native)
+            elif hasattr(date_val, 'isoformat'):
+                return date_val.isoformat()
+            return str(date_val)
+        
+        return {
+            "orderId": order_id_result,
+            "expectedDelivery": _convert_date(expected_delivery),
+            "orderDate": _convert_date(order_date),
+            "status": status
+        }
+    
+    return await async_with_session(_work)
+
+
+async def get_order_price(order_id: str) -> Optional[Dict[str, Any]]:
+    """
+    Get the price (totalAmount) of an order from Neo4j, including item breakdown.
+    
+    Args:
+        order_id: Order ID to query
+    
+    Returns:
+        Dictionary with order price, items, and totals, or None if not found
+    """
+    if not driver:
+        raise RuntimeError("Neo4j driver is not initialized. Neo4j is required for this application.")
+    
+    def _work(session):
+        result = session.run(
+            """
+            MATCH (o:Order {id: $order_id})
+            OPTIONAL MATCH (o)-[:HAS_ITEM]->(item:OrderItem)
+            RETURN o.id AS orderId,
+                   o.totalAmount AS totalAmount,
+                   collect(DISTINCT {
+                       id: item.id,
+                       name: item.name,
+                       quantity: item.quantity,
+                       price: item.price
+                   }) AS items
+            LIMIT 1
+            """,
+            {"order_id": order_id}
+        )
+        
+        record = result.single()
+        if not record:
+            return None
+        
+        order_id_result = record["orderId"]
+        total_amount = record["totalAmount"]
+        items = record["items"] or []
+        
+        # Filter out None items
+        items = [item for item in items if item.get("id")]
+        
+        return {
+            "orderId": order_id_result,
+            "totalAmount": float(total_amount) if total_amount else 0.0,
+            "items": items,
+            "itemCount": len(items)
+        }
+    
+    return await async_with_session(_work)
+
+
+async def check_return_eligibility(order_id: str) -> Dict[str, Any]:
+    """
+    Check if an order is eligible for return based on return policy (30 days from purchase).
+    
+    Args:
+        order_id: Order ID to check
+    
+    Returns:
+        Dictionary with eligibility status, days since purchase, and return policy info
+    """
+    if not driver:
+        raise RuntimeError("Neo4j driver is not initialized. Neo4j is required for this application.")
+    
+    from datetime import datetime, date, timedelta
+    
+    def _work(session):
+        result = session.run(
+            """
+            MATCH (o:Order {id: $order_id})
+            RETURN o.id AS orderId,
+                   o.orderDate AS orderDate,
+                   o.status AS status,
+                   o.totalAmount AS totalAmount
+            LIMIT 1
+            """,
+            {"order_id": order_id}
+        )
+        
+        record = result.single()
+        if not record:
+            return {
+                "orderId": order_id,
+                "eligible": False,
+                "reason": "Order not found",
+                "daysSincePurchase": None,
+                "returnPolicyDays": 30
+            }
+        
+        order_date = record["orderDate"]
+        status = record["status"]
+        total_amount = record["totalAmount"]
+        
+        # Convert Neo4j date to Python date
+        if hasattr(order_date, 'to_native'):
+            order_date_py = order_date.to_native()
+        elif hasattr(order_date, 'year'):
+            # Already a date-like object
+            order_date_py = date(order_date.year, order_date.month, order_date.day)
+        else:
+            # Try to parse string
+            try:
+                if isinstance(order_date, str):
+                    order_date_py = datetime.fromisoformat(order_date.split('T')[0]).date()
+                else:
+                    order_date_py = date.today()
+            except:
+                order_date_py = date.today()
+        
+        # Calculate days since purchase
+        today = date.today()
+        days_since_purchase = (today - order_date_py).days
+        
+        # Check eligibility
+        return_policy_days = 30
+        eligible = days_since_purchase <= return_policy_days
+        
+        # Additional checks
+        reasons = []
+        if not eligible:
+            reasons.append(f"Order is {days_since_purchase} days old, exceeds {return_policy_days} day return policy")
+        
+        if status == "Delivered":
+            # Can only return delivered orders
+            pass
+        elif status in ["Cancelled", "Refunded"]:
+            eligible = False
+            reasons.append(f"Order status is {status}, cannot return")
+        elif status in ["Processing", "Pending"]:
+            eligible = False
+            reasons.append(f"Order status is {status}, must be delivered first")
+        
+        return {
+            "orderId": order_id,
+            "eligible": eligible,
+            "daysSincePurchase": days_since_purchase,
+            "returnPolicyDays": return_policy_days,
+            "orderDate": order_date_py.isoformat() if isinstance(order_date_py, date) else str(order_date_py),
+            "status": status,
+            "totalAmount": float(total_amount) if total_amount else 0.0,
+            "reason": "; ".join(reasons) if reasons else "Order is eligible for return",
+            "daysRemaining": max(0, return_policy_days - days_since_purchase) if eligible else 0
+        }
+    
+    return await async_with_session(_work)
+
+
+async def initiate_return_request(order_id: str, reason: Optional[str] = None, requires_approval: bool = True) -> Dict[str, Any]:
+    """
+    Initiate a return request for an order with human-in-the-loop approval.
+    
+    Args:
+        order_id: Order ID to return
+        reason: Optional reason for return
+        requires_approval: If True, requires human approval before processing
+    
+    Returns:
+        Dictionary with return request status and approval requirement
+    """
+    if not driver:
+        raise RuntimeError("Neo4j driver is not initialized. Neo4j is required for this application.")
+    
+    # First check eligibility
+    eligibility = await check_return_eligibility(order_id)
+    
+    if not eligibility.get("eligible", False):
+        return {
+            "success": False,
+            "orderId": order_id,
+            "requiresApproval": False,
+            "message": f"Order {order_id} is not eligible for return: {eligibility.get('reason', 'Unknown reason')}",
+            "eligibility": eligibility
+        }
+    
+    # Get order details
+    order_price = await get_order_price(order_id)
+    total_amount = order_price.get("totalAmount", 0.0) if order_price else 0.0
+    
+    from datetime import datetime
+    import uuid
+    
+    return_request_id = f"RET-{order_id}-{int(datetime.utcnow().timestamp())}"
+    
+    if requires_approval:
+        # Create return request that needs approval
+        def _work(session):
+            session.run(
+                """
+                MATCH (o:Order {id: $order_id})
+                MERGE (r:ReturnRequest {id: $return_id})
+                SET r.orderId = $order_id,
+                    r.status = "Pending Approval",
+                    r.amount = $amount,
+                    r.reason = $reason,
+                    r.requestedAt = datetime(),
+                    r.requiresApproval = true,
+                    r.currency = "USD"
+                MERGE (o)-[:HAS_RETURN_REQUEST]->(r)
+                RETURN r
+                """,
+                {
+                    "order_id": order_id,
+                    "return_id": return_request_id,
+                    "amount": total_amount,
+                    "reason": reason or "Customer request"
+                }
+            )
+        
+        await async_with_session(_work)
+        
+        return {
+            "success": True,
+            "orderId": order_id,
+            "returnRequestId": return_request_id,
+            "requiresApproval": True,
+            "status": "Pending Approval",
+            "message": f"Return request created for order {order_id}. Awaiting human approval.",
+            "amount": total_amount,
+            "reason": reason or "Customer request",
+            "eligibility": eligibility
+        }
+    else:
+        # Auto-approve and process
+        def _work(session):
+            session.run(
+                """
+                MATCH (o:Order {id: $order_id})
+                MERGE (r:ReturnRequest {id: $return_id})
+                SET r.orderId = $order_id,
+                    r.status = "Approved",
+                    r.amount = $amount,
+                    r.reason = $reason,
+                    r.requestedAt = datetime(),
+                    r.approvedAt = datetime(),
+                    r.requiresApproval = false,
+                    r.currency = "USD"
+                MERGE (o)-[:HAS_RETURN_REQUEST]->(r)
+                SET o.status = "Returned"
+                RETURN r
+                """,
+                {
+                    "order_id": order_id,
+                    "return_id": return_request_id,
+                    "amount": total_amount,
+                    "reason": reason or "Customer request"
+                }
+            )
+        
+        await async_with_session(_work)
+        
+        return {
+            "success": True,
+            "orderId": order_id,
+            "returnRequestId": return_request_id,
+            "requiresApproval": False,
+            "status": "Approved",
+            "message": f"Return request for order {order_id} has been approved and processed.",
+            "amount": total_amount,
+            "reason": reason or "Customer request",
+            "eligibility": eligibility
+        }
+
+
+async def approve_return_request(return_request_id: str, approved: bool = True) -> Dict[str, Any]:
+    """
+    Approve or reject a return request (human-in-the-loop).
+    
+    Args:
+        return_request_id: Return request ID to approve/reject
+        approved: True to approve, False to reject
+    
+    Returns:
+        Dictionary with approval status
+    """
+    if not driver:
+        raise RuntimeError("Neo4j driver is not initialized. Neo4j is required for this application.")
+    
+    from datetime import datetime
+    
+    def _work(session):
+        if approved:
+            result = session.run(
+                """
+                MATCH (r:ReturnRequest {id: $return_id})
+                MATCH (r)<-[:HAS_RETURN_REQUEST]-(o:Order)
+                SET r.status = "Approved",
+                    r.approvedAt = datetime(),
+                    o.status = "Returned"
+                RETURN r, o.id AS orderId
+                """,
+                {"return_id": return_request_id}
+            )
+        else:
+            result = session.run(
+                """
+                MATCH (r:ReturnRequest {id: $return_id})
+                SET r.status = "Rejected",
+                    r.rejectedAt = datetime()
+                RETURN r
+                """,
+                {"return_id": return_request_id}
+            )
+        
+        record = result.single()
+        if not record:
+            return None
+        
+        return {
+            "returnRequestId": return_request_id,
+            "approved": approved,
+            "status": "Approved" if approved else "Rejected",
+            "orderId": record.get("orderId") if approved else None
+        }
+    
+    result = await async_with_session(_work)
+    
+    if not result:
+        return {
+            "success": False,
+            "returnRequestId": return_request_id,
+            "message": "Return request not found"
+        }
+    
+    return {
+        "success": True,
+        "message": f"Return request {return_request_id} has been {'approved' if approved else 'rejected'}.",
+        **result
+    }
+
+
+async def get_return_policy() -> Dict[str, Any]:
+    """
+    Get the return policy information from Neo4j.
+
+    Returns:
+        Dictionary with return policy details
+    """
+    if not driver:
+        raise RuntimeError("Neo4j driver is not initialized. Neo4j is required for this application.")
+
+    def _work(session):
+        result = session.run(
+            """
+            MATCH (p:ReturnPolicy)
+            RETURN p.id AS id,
+                   p.description AS description,
+                   coalesce(p.returnWindowDays, 30) AS returnWindowDays,
+                   coalesce(p.restockingFee, 0.0) AS restockingFee,
+                   p.contactEmail AS contactEmail
+            ORDER BY p.returnWindowDays DESC
+            LIMIT 1
+            """
+        )
+        return result.single()
+
+    record = await async_with_session(_work)
+
+    if not record:
+        return {
+            "returnPolicyDays": 30,
+            "description": "Returns are accepted within 30 days of purchase date",
+            "conditions": [
+                "Item must be in original condition",
+                "Original packaging preferred",
+                "Refund will be processed to original payment method",
+                "Processing time: 5-7 business days after approval"
+            ],
+            "eligibleStatuses": ["Delivered", "Shipped"],
+            "nonEligibleStatuses": ["Cancelled", "Refunded", "Processing", "Pending"],
+            "restockingFee": 0.0,
+            "contactEmail": None
+        }
+
+    return {
+        "id": record.get("id"),
+        "returnPolicyDays": int(record.get("returnWindowDays", 30)),
+        "description": record.get("description"),
+        "restockingFee": float(record.get("restockingFee", 0.0)),
+        "contactEmail": record.get("contactEmail"),
+        "conditions": [
+            "Item must be in original condition",
+            "Original packaging preferred",
+            "Refund will be processed to original payment method",
+            "Processing time: 5-7 business days after approval"
+        ],
+        "eligibleStatuses": ["Delivered", "Shipped"],
+        "nonEligibleStatuses": ["Cancelled", "Refunded", "Processing", "Pending"]
+    }
+
+async def get_coupon_details(coupon_code: Optional[str]) -> Optional[Dict[str, Any]]:
+    """
+    Retrieve coupon details from Neo4j.
+    """
+    if not coupon_code:
+        return None
+
+    if not driver:
+        raise RuntimeError("Neo4j driver is not initialized. Neo4j is required for this application.")
+
+    code = coupon_code.upper()
+
+    def _work(session):
+        result = session.run(
+            """
+            MATCH (c:Coupon {code: $code})
+            RETURN c.code AS code,
+                   c.description AS description,
+                   c.discountType AS discountType,
+                   c.discountValue AS discountValue,
+                   c.minimumOrderAmount AS minimumOrderAmount,
+                   coalesce(c.active, false) AS active
+            LIMIT 1
+            """,
+            {"code": code}
+        )
+        return result.single()
+
+    record = await async_with_session(_work)
+    if not record:
+        return None
+
+    discount_value = record.get("discountValue")
+    if discount_value is not None:
+        try:
+            discount_value = float(discount_value)
+        except (TypeError, ValueError):
+            discount_value = 0.0
+
+    minimum_amount = record.get("minimumOrderAmount")
+    if minimum_amount is not None:
+        try:
+            minimum_amount = float(minimum_amount)
+        except (TypeError, ValueError):
+            minimum_amount = 0.0
+
+    return {
+        "code": record.get("code"),
+        "description": record.get("description"),
+        "discountType": record.get("discountType"),
+        "discountValue": discount_value,
+        "minimumOrderAmount": minimum_amount,
+        "active": bool(record.get("active")),
+    }
+
+
+async def get_shipping_method(method_id: Optional[str]) -> Optional[Dict[str, Any]]:
+    """
+    Retrieve shipping method details from Neo4j.
+    """
+    if not method_id:
+        return None
+
+    if not driver:
+        raise RuntimeError("Neo4j driver is not initialized. Neo4j is required for this application.")
+
+    def _work(session):
+        result = session.run(
+            """
+            MATCH (s:ShippingMethod {id: $id})
+            RETURN s.id AS id,
+                   s.name AS name,
+                   s.baseRate AS baseRate,
+                   s.deliveryEstimate AS deliveryEstimate
+            LIMIT 1
+            """,
+            {"id": method_id}
+        )
+        return result.single()
+
+    record = await async_with_session(_work)
+    if not record:
+        return None
+
+    base_rate = record.get("baseRate")
+    if base_rate is not None:
+        try:
+            base_rate = float(base_rate)
+        except (TypeError, ValueError):
+            base_rate = 0.0
+
+    return {
+        "id": record.get("id"),
+        "name": record.get("name"),
+        "baseRate": base_rate,
+        "deliveryEstimate": record.get("deliveryEstimate"),
+    }
+
+
+async def get_tax_rate(region: Optional[str]) -> Optional[Dict[str, Any]]:
+    """
+    Retrieve tax rate information from Neo4j.
+    """
+    if not driver:
+        raise RuntimeError("Neo4j driver is not initialized. Neo4j is required for this application.")
+
+    candidates: List[str] = []
+    if region:
+        candidates.append(region.upper())
+    candidates.append("DEFAULT")
+
+    def _work(session):
+        result = session.run(
+            """
+            MATCH (t:TaxRate)
+            WHERE t.region IN $regions
+            RETURN t.region AS region,
+                   t.rate AS rate,
+                   t.description AS description
+            ORDER BY CASE WHEN t.region = "DEFAULT" THEN 1 ELSE 0 END
+            LIMIT 1
+            """,
+            {"regions": candidates}
+        )
+        return result.single()
+
+    record = await async_with_session(_work)
+    if not record:
+        return None
+
+    rate = record.get("rate")
+    if rate is not None:
+        try:
+            rate = float(rate)
+        except (TypeError, ValueError):
+            rate = 0.0
+
+    return {
+        "region": record.get("region"),
+        "rate": rate,
+        "description": record.get("description"),
+    }
+
+
+async def get_fraud_rules() -> List[Dict[str, Any]]:
+    """
+    Retrieve fraud rules from Neo4j.
+    """
+    if not driver:
+        raise RuntimeError("Neo4j driver is not initialized. Neo4j is required for this application.")
+
+    def _work(session):
+        result = session.run(
+            """
+            MATCH (r:FraudRule)
+            RETURN r.id AS id,
+                   r.description AS description,
+                   r.thresholdAmount AS thresholdAmount,
+                   coalesce(r.requiresManualReview, false) AS requiresManualReview
+            """
+        )
+        return list(result)
+
+    records = await async_with_session(_work) or []
+    rules: List[Dict[str, Any]] = []
+
+    for record in records:
+        threshold = record.get("thresholdAmount")
+        if threshold is not None:
+            try:
+                threshold = float(threshold)
+            except (TypeError, ValueError):
+                threshold = 0.0
+
+        rules.append(
+            {
+                "id": record.get("id"),
+                "description": record.get("description"),
+                "thresholdAmount": threshold,
+                "requiresManualReview": bool(record.get("requiresManualReview")),
+            }
+        )
+
+    return rules
+
+
+async def get_payment_gateway(gateway_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    """
+    Retrieve payment gateway configuration from Neo4j.
+    """
+    if not driver:
+        raise RuntimeError("Neo4j driver is not initialized. Neo4j is required for this application.")
+
+    gateway_id = gateway_id or "stripe-main"
+
+    def _work(session):
+        result = session.run(
+            """
+            MATCH (g:PaymentGateway {id: $id})
+            RETURN g.id AS id,
+                   g.provider AS provider,
+                   g.merchantId AS merchantId,
+                   coalesce(g.supports3DS, false) AS supports3DS
+            LIMIT 1
+            """,
+            {"id": gateway_id}
+        )
+        return result.single()
+
+    record = await async_with_session(_work)
+    if not record:
+        return None
+
+    return {
+        "id": record.get("id"),
+        "provider": record.get("provider"),
+        "merchantId": record.get("merchantId"),
+        "supports3DS": bool(record.get("supports3DS")),
+    }
+
+
+async def get_shipping_account(account_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    """
+    Retrieve shipping carrier account information from Neo4j.
+    """
+    if not driver:
+        raise RuntimeError("Neo4j driver is not initialized. Neo4j is required for this application.")
+
+    account_id = account_id or "ups-account"
+
+    def _work(session):
+        result = session.run(
+            """
+            MATCH (a:ShippingAccount {id: $id})
+            RETURN a.id AS id,
+                   a.carrier AS carrier,
+                   a.accountNumber AS accountNumber,
+                   a.pickupWindow AS pickupWindow
+            LIMIT 1
+            """,
+            {"id": account_id}
+        )
+        return result.single()
+
+    record = await async_with_session(_work)
+    if not record:
+        return None
+
+    return {
+        "id": record.get("id"),
+        "carrier": record.get("carrier"),
+        "accountNumber": record.get("accountNumber"),
+        "pickupWindow": record.get("pickupWindow"),
+    }
+
+
+async def get_product_by_name(product_name: Optional[str]) -> Optional[Dict[str, Any]]:
+    """
+    Retrieve a product by name.
+    """
+    if not product_name:
+        return None
+
+    if not driver:
+        raise RuntimeError("Neo4j driver is not initialized. Neo4j is required for this application.")
+
+    def _work(session):
+        result = session.run(
+            """
+            MATCH (p:Product)
+            WHERE toLower(p.name) = toLower($name)
+            RETURN p.sku AS sku,
+                   p.name AS name,
+                   p.category AS category,
+                   p.price AS price,
+                   p.currency AS currency
+            LIMIT 1
+            """,
+            {"name": product_name}
+        )
+        return result.single()
+
+    record = await async_with_session(_work)
+    if not record:
+        return None
+
+    price = record.get("price")
+    if price is not None:
+        try:
+            price = float(price)
+        except (TypeError, ValueError):
+            price = 0.0
+
+    return {
+        "sku": record.get("sku"),
+        "name": record.get("name"),
+        "category": record.get("category"),
+        "price": price,
+        "currency": record.get("currency"),
+    }
+
+
+async def get_inventory_for_product(product_identifier: Optional[str]) -> List[Dict[str, Any]]:
+    """
+    Retrieve inventory records for a product by name or SKU.
+    """
+    if not product_identifier:
+        return []
+
+    if not driver:
+        raise RuntimeError("Neo4j driver is not initialized. Neo4j is required for this application.")
+
+    def _work(session):
+        result = session.run(
+            """
+            MATCH (p:Product)
+            WHERE toLower(p.name) = toLower($identifier) OR toLower(p.sku) = toLower($identifier)
+            MATCH (p)-[:HAS_INVENTORY]->(inv:Inventory)
+            RETURN inv.location AS location,
+                   inv.quantity AS quantity,
+                   inv.reserved AS reserved
+            """,
+            {"identifier": product_identifier}
+        )
+        return list(result)
+
+    records = await async_with_session(_work) or []
+    inventory: List[Dict[str, Any]] = []
+
+    for record in records:
+        quantity = record.get("quantity")
+        reserved = record.get("reserved")
+
+        try:
+            quantity = int(quantity)
+        except (TypeError, ValueError):
+            quantity = 0
+
+        try:
+            reserved = int(reserved)
+        except (TypeError, ValueError):
+            reserved = 0
+
+        inventory.append(
+            {
+                "location": record.get("location"),
+                "quantity": quantity,
+                "reserved": reserved,
+                "available": max(quantity - reserved, 0),
+            }
+        )
+
+    return inventory

@@ -13,7 +13,7 @@
       <div class="header-content">
         <div class="header-title">
           <h1>🔧Copilot</h1>
-          <p class="subtitle">AI-Powered Order Management • Fastener Search • Policy Assistant</p>
+          <p class="subtitle">AI-Powered Order Management</p>
         </div>
         <div class="header-controls">
           <div class="status-indicators">
@@ -29,6 +29,9 @@
               <option value="email">📧 Email</option>
             </select>
           </div>
+          <button id="orderPanelBtn" class="icon-btn" title="Order Management" aria-label="Orders">
+            📦
+          </button>
           <button id="settingsBtn" class="icon-btn" title="System Settings" aria-label="Settings">
             ⚙️
           </button>
@@ -65,44 +68,44 @@
                 <p>Verifying connection...</p>
               </div>
             </div>
-            
-            <div class="action-card">
-              <h5>Data Management</h5>
-              <div class="action-buttons">
-                <button class="action-btn primary" id="loadDataBtn">
-                  <span class="btn-icon">📥</span>
-                  <span class="btn-label">Load Order Data</span>
-                </button>
-                <button class="action-btn secondary" id="clearDataBtn">
-                  <span class="btn-icon">🗑️</span>
-                  <span class="btn-label">Clear & Reload</span>
-                </button>
-              </div>
-              <div class="action-info">
-                <p class="info-text">Loads embedded order data from <code>neo4j_module.py</code></p>
-              </div>
-            </div>
-            
-            <div class="loading-status" id="loadingStatus" style="display: none;">
-              <div class="loading-spinner"></div>
-              <p class="loading-text">Loading data...</p>
-              <div class="loading-progress" id="loadingProgress"></div>
-            </div>
           </section>
+        </div>
+      </aside>
+      
+      <!-- Order Management Panel -->
+      <aside class="order-panel" id="orderPanel">
+        <div class="order-panel-header">
+          <h3>📦 Order Management</h3>
+          <button class="toggle-btn" id="orderPanelToggle" title="Toggle order panel">✕</button>
+        </div>
+        <div class="order-panel-content">
+          <!-- Order Search -->
+          <div class="order-search-section">
+            <div class="search-input-group">
+              <input 
+                type="text" 
+                id="orderSearch" 
+                class="order-search-input"
+                placeholder="Search orders by ID, customer, or status..."
+                autocomplete="off"
+              />
+              <button id="searchOrdersBtn" class="search-btn" title="Search orders">🔍</button>
+            </div>
+            <div class="order-list" id="orderList">
+              <div class="loading-orders">Loading orders...</div>
+            </div>
+          </div>
           
-          <!-- Workflow Section -->
-          <section class="panel-section">
-            <h4 class="section-title">
-              <span class="section-icon">⚙️</span>
-              Workflow
-            </h4>
-            <div class="info-card">
-              <p>Workflow orchestration from <code>workflow.json</code></p>
-              <div class="workflow-info">
-                <span class="info-item">Mode: <strong id="workflowMode">Auto</strong></span>
-              </div>
+          <!-- Selected Order Details -->
+          <div class="order-details-section" id="orderDetailsSection" style="display: none;">
+            <div class="order-details-header">
+              <h4>Order Details</h4>
+              <button class="close-details-btn" id="closeOrderDetails" title="Close details">✕</button>
             </div>
-          </section>
+            <div class="order-details-content" id="orderDetailsContent">
+              <!-- Order details will be populated here -->
+            </div>
+          </div>
         </div>
       </aside>
       
@@ -111,13 +114,13 @@
         <div class="empty-state" id="emptyState">
           <div class="empty-icon">💬</div>
           <h2>Welcome to Innovator Copilot</h2>
-          <p>Ask about orders, search for fasteners, or get policy information.</p>
+          <p>Ask about orders or get order information.</p>
           <div class="empty-suggestions">
             <p>Try asking:</p>
             <ul>
               <li>"Check order status for order 12345"</li>
-              <li>"Show me PEM self-clinching standoffs"</li>
-              <li>"What is your return policy?"</li>
+              <li>"What is the price of order 67890?"</li>
+              <li>"I want to return order 11111"</li>
             </ul>
           </div>
         </div>
@@ -126,29 +129,11 @@
 
     <!-- Footer -->
     <footer class="footer">
-      <div class="quick-actions">
-        <button class="quick-btn" data-action="order" title="Check order status">
-          <span class="quick-icon">📦</span>
-          <span class="quick-label">Order Status</span>
-        </button>
-        <button class="quick-btn" data-action="track" title="Track an order">
-          <span class="quick-icon">🚚</span>
-          <span class="quick-label">Track Order</span>
-        </button>
-        <button class="quick-btn" data-action="fastener" title="Search fasteners">
-          <span class="quick-icon">🔩</span>
-          <span class="quick-label">Fastener Search</span>
-        </button>
-        <button class="quick-btn" data-action="policy" title="Ask policy questions">
-          <span class="quick-icon">📋</span>
-          <span class="quick-label">Policy Question</span>
-        </button>
-      </div>
       <div class="input-container">
         <input 
           id="msg" 
           type="text"
-          placeholder="Ask about orders, search fasteners, or ask policy questions..." 
+          placeholder="Ask about orders or get order information..." 
           autocomplete="off"
           aria-label="Message input"
         />

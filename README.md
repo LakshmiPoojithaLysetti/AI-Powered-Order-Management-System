@@ -18,11 +18,6 @@ An intelligent workflow orchestration system built with LangGraph, FastAPI, and 
 - Answer questions about warranty, shipping, and return policies
 - Document retrieval from Neo4j knowledge base
 
-### System Management
-- **Neo4j Integration**: Real-time database connection status
-- **Data Management**: Load and manage order data from embedded Cypher scripts
-- **Workflow Orchestration**: Dynamic workflow execution from JSON configuration
-
 ## 🏗️ Architecture
 
 ```
@@ -47,6 +42,35 @@ An intelligent workflow orchestration system built with LangGraph, FastAPI, and 
 ```
 
 For detailed workflow diagrams, see [WORKFLOW_DIAGRAM.md](WORKFLOW_DIAGRAM.md).
+
+## 🔄 Workflow Engine (workflow.json)
+
+The end-to-end conversation flow is orchestrated by `workflow.json`, authored in the Microsoft Copilot format. Each activity in the JSON maps to a LangGraph node in `graph.py`.
+
+| Activity (workflow.json) | Node Function (`graph.py`) | Purpose |
+| ------------------------ | -------------------------- | ------- |
+| `Start`                  | `start_node`               | Receives the incoming REST/chat request and seeds initial state. |
+| `UserTask1`              | `user_task_node`           | Performs intake, extracts entities, and runs schema validation (Pydantic-style checks via `validate_order_schema`). |
+| `RetrievalTask1`         | `retrieval_task_node`      | Pulls supporting documents (policy snippets, catalog info) from Neo4j when required. |
+| `LLMTask1`               | `llm_task_node`            | Normalises user intent with LangChain’s `ChatOpenAI`, refining entities and intent labels. |
+| `ToolTask1`              | `tool_task_node`           | Executes deterministic tools in `tools/order_tools.py` (status lookup, pricing, tracking, tax, shipping, coupon, fraud). |
+| `RouterTask1`            | `router_task_node`         | Applies routing conditions to decide whether to render a response, escalate to an agent task, or pause for human approval. |
+| `RenderTask1`            | `render_task_node`         | Formats the final AI response when no human review is pending. |
+| `AgentTask1`             | `agent_task_node`          | Handles complex fastener searches or multi-step external orchestration. |
+| `UserTask2`              | `user_task2_node`          | Human-in-the-loop approval for refunds; captures yes/no decisions and resumes the graph. |
+
+### Execution Flow
+1. **Start → Intake:** The HTTP/chat request enters the `Start` node, then `UserTask1` performs schema validation and entity extraction.
+2. **Retrieval & Intent Normalisation:** `RetrievalTask1` fetches additional context when the intent is policy-oriented. `LLMTask1` uses the LLM to refine the intent and entities.
+3. **Tool Execution:** `ToolTask1` invokes Neo4j-backed functions (order status, pricing, shipping, refunds) sourced entirely from `data.cypher` via `neo4j_module.py`.
+4. **Routing:** `RouterTask1` checks the state:
+   - If a refund requires human approval, the graph transitions to `UserTask2`.
+   - Fastener or multi-system operations route to `AgentTask1`.
+   - Otherwise the response proceeds to `RenderTask1`.
+5. **Human Review Loop:** When `UserTask2` collects an approval or rejection, the graph loops back to `LLMTask1` to re-assess state and finish execution.
+6. **Render:** `RenderTask1` composes the markdown/plaintext response returned to the client.
+
+Conditional edges in `workflow.json` (for `RouterTask1`) are respected one-to-one in `graph.py`, guaranteeing that edits to the JSON immediately alter the LangGraph behaviour without additional code changes.
 
 ## 📋 Prerequisites
 
@@ -128,9 +152,8 @@ http://localhost:4000
 
 ### Load Order Data
 
-1. Click the **⚙️ Settings** button in the header
-2. In the System Management panel, click **"Load Order Data"**
-3. Wait for the confirmation message
+1. On first launch the server auto-seeds `data.cypher` into Neo4j.
+2. Use the order management panel to confirm orders are available.
 
 Alternatively, load data programmatically:
 
@@ -223,12 +246,7 @@ copilot-workflow/
 
 ### Workflow Configuration
 
-The system supports two workflow formats:
-
-1. **Microsoft Copilot Format** (`workflow.json`): Uses `WorkflowActivities` and `WorkflowConnections`
-2. **Standard LangGraph Format**: Uses `entry_point` and `nodes`
-
-The system automatically detects the format and builds the appropriate workflow.
+`graph.py` automatically parses the Microsoft Copilot-flavoured `workflow.json`. Activities are converted into LangGraph nodes at runtime, and conditional edges (particularly for `RouterTask1`) are wired based on the JSON connections. Updating the JSON immediately changes the workflow without modifying Python code.
 
 ### Order Data
 
