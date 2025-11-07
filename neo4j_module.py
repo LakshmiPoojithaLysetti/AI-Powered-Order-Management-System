@@ -157,369 +157,34 @@ async def ensure_demo_docs():
         )
         session.run(
             'CREATE (:Doc {id: "doc3", title: "Returns", '
-            'body: "Returns accepted within 30 days if item is unused. Contact support to get an RMA."})'
+            'body: "Returns accepted within 300 days if item is unused. Contact support to get an RMA."})'
         )
     
     await async_with_session(_work)
 
+DATA_CYPHER_PATH = Path("data.cypher")
+
+def load_cypher_file(file_path: Path | str = DATA_CYPHER_PATH) -> str:
+    """Read the raw contents of data.cypher (or supplied file)."""
+    path = Path(file_path)
+    if not path.exists():
+        raise FileNotFoundError(f"Cypher file not found: {path}")
+    return path.read_text(encoding="utf-8")
 
 # ============================================================================
-# Embedded Order Data (from data.cypher)
-# ============================================================================
-
-EMBEDDED_ORDER_DATA = """// Neo4j data seed file - Order Management System
-// Usage: cat data.cypher | cypher-shell -u neo4j -p password
-
-// Create Carriers
-
-MERGE (ups:Carrier {name: "UPS"})
-SET ups.code = "UPS"
-SET ups.website = "https://www.ups.com"
-
-MERGE (fedex:Carrier {name: "FedEx"})
-SET fedex.code = "FDX"
-SET fedex.website = "https://www.fedex.com"
-
-MERGE (usps:Carrier {name: "USPS"})
-SET usps.code = "USPS"
-SET usps.website = "https://www.usps.com"
-
-MERGE (dhl:Carrier {name: "DHL"})
-SET dhl.code = "DHL"
-SET dhl.website = "https://www.dhl.com"
-
-// Create Customers
-
-MERGE (cust1:Customer {id: "customer-12345"})
-SET cust1.name = "Demo Customer"
-SET cust1.email = "demo.customer@example.com"
-SET cust1.phone = "+1-555-0101"
-
-MERGE (cust2:Customer {id: "customer-67890"})
-SET cust2.name = "John Smith"
-SET cust2.email = "john.smith@example.com"
-SET cust2.phone = "+1-555-0102"
-
-MERGE (cust3:Customer {id: "customer-11111"})
-SET cust3.name = "Jane Doe"
-SET cust3.email = "jane.doe@example.com"
-SET cust3.phone = "+1-555-0103"
-
-// Create Orders
-MERGE (order1:Order {id: "12345"})
-SET order1.status = "Shipped"
-SET order1.tracking = "1Z999AA10123456784"
-SET order1.orderDate = date("2024-01-15")
-SET order1.expectedDelivery = date("2024-01-20")
-SET order1.totalAmount = 199.99
-SET order1.createdAt = datetime("2024-01-15T10:30:00Z")
-SET order1.updatedAt = datetime("2024-01-18T14:20:00Z")
-
-MERGE (order1)-[:PLACED_BY]->(cust1)
-MERGE (order1)-[:SHIPPED_BY]->(ups)
-
-// Order 12345 Items
-MERGE (item1_1:OrderItem {id: "12345-item-1", orderId: "12345"})
-SET item1_1.name = "Product A"
-SET item1_1.quantity = 2
-SET item1_1.price = 99.99
-
-MERGE (order1)-[:HAS_ITEM]->(item1_1)
-
-// Order 12345 Tracking
-MERGE (track1_1:TrackingEvent {orderId: "12345", date: datetime("2024-01-15T10:30:00Z")})
-SET track1_1.location = "Warehouse"
-SET track1_1.status = "Order Placed"
-
-MERGE (track1_2:TrackingEvent {orderId: "12345", date: datetime("2024-01-16T08:15:00Z")})
-SET track1_2.location = "Distribution Center"
-SET track1_2.status = "Shipped"
-
-MERGE (track1_3:TrackingEvent {orderId: "12345", date: datetime("2024-01-17T12:30:00Z")})
-SET track1_3.location = "Chicago, IL"
-SET track1_3.status = "In Transit"
-
-MERGE (order1)-[:HAS_TRACKING]->(track1_1)
-MERGE (order1)-[:HAS_TRACKING]->(track1_2)
-MERGE (order1)-[:HAS_TRACKING]->(track1_3)
-
-// Order 67890
-MERGE (order2:Order {id: "67890"})
-SET order2.status = "In Transit"
-SET order2.tracking = "1Z888AA10234567890"
-SET order2.orderDate = date("2024-01-20")
-SET order2.expectedDelivery = date("2024-01-25")
-SET order2.totalAmount = 349.99
-SET order2.createdAt = datetime("2024-01-20T09:15:00Z")
-SET order2.updatedAt = datetime("2024-01-21T16:45:00Z")
-
-MERGE (order2)-[:PLACED_BY]->(cust2)
-MERGE (order2)-[:SHIPPED_BY]->(fedex)
-
-MERGE (item2_1:OrderItem {id: "67890-item-1", orderId: "67890"})
-SET item2_1.name = "Product B"
-SET item2_1.quantity = 1
-SET item2_1.price = 249.99
-
-MERGE (item2_2:OrderItem {id: "67890-item-2", orderId: "67890"})
-SET item2_2.name = "Product C"
-SET item2_2.quantity = 1
-SET item2_2.price = 99.99
-
-MERGE (order2)-[:HAS_ITEM]->(item2_1)
-MERGE (order2)-[:HAS_ITEM]->(item2_2)
-
-MERGE (track2_1:TrackingEvent {orderId: "67890", date: datetime("2024-01-20T09:15:00Z")})
-SET track2_1.location = "Warehouse"
-SET track2_1.status = "Order Placed"
-
-MERGE (track2_2:TrackingEvent {orderId: "67890", date: datetime("2024-01-21T10:00:00Z")})
-SET track2_2.location = "Distribution Center"
-SET track2_2.status = "Shipped"
-
-MERGE (track2_3:TrackingEvent {orderId: "67890", date: datetime("2024-01-21T16:45:00Z")})
-SET track2_3.location = "New York, NY"
-SET track2_3.status = "In Transit"
-
-MERGE (order2)-[:HAS_TRACKING]->(track2_1)
-MERGE (order2)-[:HAS_TRACKING]->(track2_2)
-MERGE (order2)-[:HAS_TRACKING]->(track2_3)
-
-// Order 11111
-MERGE (order3:Order {id: "11111"})
-SET order3.status = "Delivered"
-SET order3.tracking = "9400111899223197428490"
-SET order3.orderDate = date("2024-01-10")
-SET order3.expectedDelivery = date("2024-01-15")
-SET order3.totalAmount = 89.99
-SET order3.createdAt = datetime("2024-01-10T11:20:00Z")
-SET order3.updatedAt = datetime("2024-01-15T14:30:00Z")
-
-MERGE (order3)-[:PLACED_BY]->(cust3)
-MERGE (order3)-[:SHIPPED_BY]->(usps)
-
-MERGE (item3_1:OrderItem {id: "11111-item-1", orderId: "11111"})
-SET item3_1.name = "Product D"
-SET item3_1.quantity = 1
-SET item3_1.price = 89.99
-
-MERGE (order3)-[:HAS_ITEM]->(item3_1)
-
-MERGE (track3_1:TrackingEvent {orderId: "11111", date: datetime("2024-01-10T11:20:00Z")})
-SET track3_1.location = "Warehouse"
-SET track3_1.status = "Order Placed"
-
-MERGE (track3_2:TrackingEvent {orderId: "11111", date: datetime("2024-01-12T09:00:00Z")})
-SET track3_2.location = "Distribution Center"
-SET track3_2.status = "Shipped"
-
-MERGE (track3_3:TrackingEvent {orderId: "11111", date: datetime("2024-01-14T13:15:00Z")})
-SET track3_3.location = "Los Angeles, CA"
-SET track3_3.status = "Out for Delivery"
-
-MERGE (track3_4:TrackingEvent {orderId: "11111", date: datetime("2024-01-15T14:30:00Z")})
-SET track3_4.location = "Los Angeles, CA"
-SET track3_4.status = "Delivered"
-
-MERGE (order3)-[:HAS_TRACKING]->(track3_1)
-MERGE (order3)-[:HAS_TRACKING]->(track3_2)
-MERGE (order3)-[:HAS_TRACKING]->(track3_3)
-MERGE (order3)-[:HAS_TRACKING]->(track3_4)
-
-// Order 22222
-MERGE (order4:Order {id: "22222"})
-SET order4.status = "Processing"
-SET order4.orderDate = date("2024-01-25")
-SET order4.totalAmount = 159.99
-SET order4.createdAt = datetime("2024-01-25T08:00:00Z")
-SET order4.updatedAt = datetime("2024-01-25T08:00:00Z")
-
-MERGE (order4)-[:PLACED_BY]->(cust1)
-
-MERGE (item4_1:OrderItem {id: "22222-item-1", orderId: "22222"})
-SET item4_1.name = "Product E"
-SET item4_1.quantity = 1
-SET item4_1.price = 159.99
-
-MERGE (order4)-[:HAS_ITEM]->(item4_1)
-
-// Create Refunds
-
-MERGE (refund1:Refund {id: "RFD-22222-1706256000"})
-SET refund1.orderId = "22222"
-SET refund1.status = "Processing"
-SET refund1.amount = 159.99
-SET refund1.currency = "USD"
-SET refund1.reason = "Customer request"
-SET refund1.estimatedProcessingTime = "5-7 business days"
-SET refund1.requestedAt = datetime("2024-01-25T10:00:00Z")
-SET refund1.message = "Your refund request has been received and is being processed."
-SET refund1.createdAt = datetime("2024-01-25T10:00:00Z")
-
-MERGE (order4)-[:HAS_REFUND]->(refund1)
-
-// Additional Orders
-
-// Order 33333
-MERGE (order5:Order {id: "33333"})
-SET order5.status = "Pending"
-SET order5.orderDate = date("2024-01-28")
-SET order5.totalAmount = 299.99
-SET order5.createdAt = datetime("2024-01-28T12:00:00Z")
-SET order5.updatedAt = datetime("2024-01-28T12:00:00Z")
-
-MERGE (order5)-[:PLACED_BY]->(cust2)
-
-MERGE (item5_1:OrderItem {id: "33333-item-1", orderId: "33333"})
-SET item5_1.name = "Product F"
-SET item5_1.quantity = 2
-SET item5_1.price = 149.99
-
-MERGE (order5)-[:HAS_ITEM]->(item5_1)
-
-// Order 44444
-MERGE (order6:Order {id: "44444"})
-SET order6.status = "Cancelled"
-SET order6.orderDate = date("2024-01-22")
-SET order6.totalAmount = 79.99
-SET order6.createdAt = datetime("2024-01-22T15:30:00Z")
-SET order6.updatedAt = datetime("2024-01-23T09:00:00Z")
-
-MERGE (order6)-[:PLACED_BY]->(cust3)
-
-MERGE (item6_1:OrderItem {id: "44444-item-1", orderId: "44444"})
-SET item6_1.name = "Product G"
-SET item6_1.quantity = 1
-SET item6_1.price = 79.99
-
-MERGE (order6)-[:HAS_ITEM]->(item6_1)
-
-
-// Additional Workflow Support Data -------------------------------------------------
-
-// Return Policy for RenderTask / UserTask2 messaging
-MERGE (policy:ReturnPolicy {id: "return-policy-default"})
-SET policy.description = "Items can be returned within 30 days of delivery if unused and in original packaging."
-SET policy.returnWindowDays = 30
-SET policy.restockingFee = 0.0
-SET policy.contactEmail = "returns@example.com"
-
-// Catalog / Inventory data for RetrievalTask1
-MERGE (prodA:Product {sku: "SKU-1001"})
-SET prodA.name = "High Torque Screwdriver Set"
-SET prodA.category = "Fasteners"
-SET prodA.price = 49.99
-SET prodA.currency = "USD"
-
-MERGE (prodB:Product {sku: "SKU-1002"})
-SET prodB.name = "Industrial Bolt Pack"
-SET prodB.category = "Fasteners"
-SET prodB.price = 29.99
-SET prodB.currency = "USD"
-
-MERGE (prodC:Product {sku: "SKU-1003"})
-SET prodC.name = "Heavy Duty Anchors"
-SET prodC.category = "Hardware"
-SET prodC.price = 19.99
-SET prodC.currency = "USD"
-
-MERGE (prodA)-[:HAS_INVENTORY]->(:Inventory {location: "WH-1", quantity: 150, reserved: 35})
-MERGE (prodB)-[:HAS_INVENTORY]->(:Inventory {location: "WH-2", quantity: 80, reserved: 10})
-MERGE (prodC)-[:HAS_INVENTORY]->(:Inventory {location: "WH-3", quantity: 200, reserved: 5})
-
-// Coupons / Discounts for ToolTask1 deterministic tools
-MERGE (coupon10:Coupon {code: "SAVE10"})
-SET coupon10.description = "10% off orders over $100"
-SET coupon10.discountType = "percentage"
-SET coupon10.discountValue = 10
-SET coupon10.minimumOrderAmount = 100
-SET coupon10.active = true
-
-MERGE (couponShip:Coupon {code: "FREESHIP"})
-SET couponShip.description = "Free standard shipping on any order"
-SET couponShip.discountType = "shipping"
-SET couponShip.discountValue = 0
-SET couponShip.active = true
-
-// Shipping methods for ToolTask1 calculations
-MERGE (shipStd:ShippingMethod {id: "standard"})
-SET shipStd.name = "Standard Ground"
-SET shipStd.baseRate = 7.99
-SET shipStd.deliveryEstimate = "3-5 business days"
-
-MERGE (shipExp:ShippingMethod {id: "express"})
-SET shipExp.name = "Express Air"
-SET shipExp.baseRate = 19.99
-SET shipExp.deliveryEstimate = "1-2 business days"
-
-// Tax rules for deterministic tax calculation
-MERGE (taxCA:TaxRate {region: "CA"})
-SET taxCA.rate = 0.0825
-SET taxCA.description = "California combined tax"
-
-MERGE (taxNY:TaxRate {region: "NY"})
-SET taxNY.rate = 0.08875
-SET taxNY.description = "New York combined tax"
-
-MERGE (taxDefault:TaxRate {region: "DEFAULT"})
-SET taxDefault.rate = 0.06
-SET taxDefault.description = "Fallback sales tax"
-
-// Fraud rules for ToolTask1 checks
-MERGE (fraudRule:FraudRule {id: "high_amount_manual"})
-SET fraudRule.description = "Orders over $500 require manual review"
-SET fraudRule.thresholdAmount = 500
-SET fraudRule.requiresManualReview = true
-
-// Payment processor accounts for AgentTask1 orchestration
-MERGE (paymentAcct:PaymentGateway {id: "stripe-main"})
-SET paymentAcct.provider = "Stripe"
-SET paymentAcct.merchantId = "acct_1234567890"
-SET paymentAcct.supports3DS = true
-
-// Shipping carrier accounts for AgentTask1 label generation
-MERGE (shippingAcct:ShippingAccount {id: "ups-account"})
-SET shippingAcct.carrier = "UPS"
-SET shippingAcct.accountNumber = "1AB234"
-SET shippingAcct.pickupWindow = "16:00-18:00"
-
-// Example background tasks for AgentTask1 reference
-MERGE (bgTaskPayment:BackgroundTask {id: "BG-PAYMENT-001"})
-SET bgTaskPayment.type = "payment_capture"
-SET bgTaskPayment.status = "completed"
-SET bgTaskPayment.details = "Captured $159.99 for order 22222 via Stripe"
-
-MERGE (bgTaskInventory:BackgroundTask {id: "BG-INVENTORY-001"})
-SET bgTaskInventory.type = "inventory_hold"
-SET bgTaskInventory.status = "completed"
-SET bgTaskInventory.details = "Reserved inventory for order 22222"
-
-MERGE (bgTaskShipping:BackgroundTask {id: "BG-SHIPPING-001"})
-SET bgTaskShipping.type = "shipping_label"
-SET bgTaskShipping.status = "queued"
-SET bgTaskShipping.details = "Awaiting label generation for order 67890"
-
-// Link background tasks to orders where applicable
-MERGE (order4)-[:HAS_BACKGROUND_TASK]->(bgTaskPayment)
-MERGE (order4)-[:HAS_BACKGROUND_TASK]->(bgTaskInventory)
-MERGE (order2)-[:HAS_BACKGROUND_TASK]->(bgTaskShipping)
-"""
-
-
-# ============================================================================
-# Data Access Functions
+# Data Access Functions (parsed from data.cypher)
 # ============================================================================
 
 def get_embedded_order_data() -> dict[str, Any]:
     """
-    Parse and return structured data from EMBEDDED_ORDER_DATA.
-    
-    Returns:
-        Dictionary containing parsed carriers, customers, orders, items, tracking events, and refunds
+    Parse and return structured data extracted directly from data.cypher.
+    Mirrors the previous embedded-data behaviour but reads from disk.
     """
     import re
     from datetime import datetime, date
-    
+
+    cypher_content = load_cypher_file(DATA_CYPHER_PATH)
+
     data = {
         "carriers": [],
         "customers": [],
@@ -528,181 +193,165 @@ def get_embedded_order_data() -> dict[str, Any]:
         "tracking_events": [],
         "refunds": []
     }
-    
+
     # Parse carriers
     carrier_pattern = r'MERGE\s+\((\w+):Carrier\s+\{name:\s+"([^"]+)"\}\)'
     carrier_set_pattern = r'SET\s+(\w+)\.(\w+)\s*=\s*["\']?([^"\']+)["\']?'
-    
+
     carriers = {}
-    for match in re.finditer(carrier_pattern, EMBEDDED_ORDER_DATA):
+    for match in re.finditer(carrier_pattern, cypher_content):
         var_name = match.group(1)
         name = match.group(2)
         carriers[var_name] = {"name": name}
-    
+
     # Extract carrier properties
-    for match in re.finditer(carrier_set_pattern, EMBEDDED_ORDER_DATA):
+    for match in re.finditer(carrier_set_pattern, cypher_content):
         var_name = match.group(1)
         prop = match.group(2)
         value = match.group(3)
         if var_name in carriers:
             carriers[var_name][prop] = value
-    
+
     data["carriers"] = list(carriers.values())
-    
+
     # Parse customers
     customer_pattern = r'MERGE\s+\((\w+):Customer\s+\{id:\s+"([^"]+)"\}\)'
     customer_set_pattern = r'SET\s+(\w+)\.(\w+)\s*=\s*["\']?([^"\']+)["\']?'
-    
+
     customers = {}
-    for match in re.finditer(customer_pattern, EMBEDDED_ORDER_DATA):
+    for match in re.finditer(customer_pattern, cypher_content):
         var_name = match.group(1)
         customer_id = match.group(2)
         customers[var_name] = {"id": customer_id}
-    
+
     # Extract customer properties
-    for match in re.finditer(customer_set_pattern, EMBEDDED_ORDER_DATA):
+    for match in re.finditer(customer_set_pattern, cypher_content):
         var_name = match.group(1)
         prop = match.group(2)
         value = match.group(3)
         if var_name in customers:
             customers[var_name][prop] = value
-    
+
     data["customers"] = list(customers.values())
-    
+
     # Parse orders
     order_pattern = r'MERGE\s+\((\w+):Order\s+\{id:\s+"([^"]+)"\}\)'
     order_set_pattern = r'SET\s+(\w+)\.(\w+)\s*=\s*([^"\n]+)'
-    
+
     orders = {}
-    for match in re.finditer(order_pattern, EMBEDDED_ORDER_DATA):
+    for match in re.finditer(order_pattern, cypher_content):
         var_name = match.group(1)
         order_id = match.group(2)
         orders[var_name] = {"id": order_id}
-    
+
     # Extract order properties
-    for match in re.finditer(order_set_pattern, EMBEDDED_ORDER_DATA):
+    for match in re.finditer(order_set_pattern, cypher_content):
         var_name = match.group(1)
         prop = match.group(2)
         value = match.group(3).strip().strip('"').strip("'")
         if var_name in orders:
-            # Try to parse dates and numbers
             if value.startswith('date(') or value.startswith('datetime('):
-                # Extract the date string
                 date_match = re.search(r'["\']([^"\']+)["\']', value)
                 if date_match:
                     value = date_match.group(1)
             elif value.replace('.', '').replace('-', '').isdigit():
                 try:
-                    if '.' in value:
-                        value = float(value)
-                    else:
-                        value = int(value)
-                except:
+                    value = float(value) if '.' in value else int(value)
+                except Exception:
                     pass
             orders[var_name][prop] = value
-    
+
     # Parse relationships to get customer and carrier for each order
     order_customer_pattern = r'MERGE\s+\((\w+)\)-\[:PLACED_BY\]->\((\w+)\)'
     order_carrier_pattern = r'MERGE\s+\((\w+)\)-\[:SHIPPED_BY\]->\((\w+)\)'
-    
-    for match in re.finditer(order_customer_pattern, EMBEDDED_ORDER_DATA):
+
+    for match in re.finditer(order_customer_pattern, cypher_content):
         order_var = match.group(1)
         customer_var = match.group(2)
         if order_var in orders and customer_var in customers:
             orders[order_var]["customerId"] = customers[customer_var]["id"]
-    
-    for match in re.finditer(order_carrier_pattern, EMBEDDED_ORDER_DATA):
+
+    for match in re.finditer(order_carrier_pattern, cypher_content):
         order_var = match.group(1)
         carrier_var = match.group(2)
         if order_var in orders and carrier_var in carriers:
             orders[order_var]["carrierName"] = carriers[carrier_var]["name"]
-    
+
     data["orders"] = list(orders.values())
-    
+
     # Parse order items
     item_pattern = r'MERGE\s+\((\w+):OrderItem\s+\{id:\s+"([^"]+)",\s*orderId:\s+"([^"]+)"\}\)'
     item_set_pattern = r'SET\s+(\w+)\.(\w+)\s*=\s*([^"\n]+)'
-    
+
     items = {}
-    for match in re.finditer(item_pattern, EMBEDDED_ORDER_DATA):
+    for match in re.finditer(item_pattern, cypher_content):
         var_name = match.group(1)
         item_id = match.group(2)
         order_id = match.group(3)
         items[var_name] = {"id": item_id, "orderId": order_id}
-    
-    # Extract item properties
-    for match in re.finditer(item_set_pattern, EMBEDDED_ORDER_DATA):
+
+    for match in re.finditer(item_set_pattern, cypher_content):
         var_name = match.group(1)
         prop = match.group(2)
         value = match.group(3).strip().strip('"').strip("'")
         if var_name in items:
-            # Try to parse numbers
             if value.replace('.', '').isdigit():
                 try:
-                    if '.' in value:
-                        value = float(value)
-                    else:
-                        value = int(value)
-                except:
+                    value = float(value) if '.' in value else int(value)
+                except Exception:
                     pass
             items[var_name][prop] = value
-    
+
     data["items"] = list(items.values())
-    
+
     # Parse tracking events
     track_pattern = r'MERGE\s+\((\w+):TrackingEvent\s+\{orderId:\s+"([^"]+)",\s*date:\s*datetime\("([^"]+)"\)\}\)'
     track_set_pattern = r'SET\s+(\w+)\.(\w+)\s*=\s*["\']?([^"\']+)["\']?'
-    
+
     tracking = {}
-    for match in re.finditer(track_pattern, EMBEDDED_ORDER_DATA):
+    for match in re.finditer(track_pattern, cypher_content):
         var_name = match.group(1)
         order_id = match.group(2)
         date_str = match.group(3)
         tracking[var_name] = {"orderId": order_id, "date": date_str}
-    
-    # Extract tracking properties
-    for match in re.finditer(track_set_pattern, EMBEDDED_ORDER_DATA):
+
+    for match in re.finditer(track_set_pattern, cypher_content):
         var_name = match.group(1)
         prop = match.group(2)
         value = match.group(3)
         if var_name in tracking:
             tracking[var_name][prop] = value
-    
+
     data["tracking_events"] = list(tracking.values())
-    
+
     # Parse refunds
     refund_pattern = r'MERGE\s+\((\w+):Refund\s+\{id:\s+"([^"]+)"\}\)'
     refund_set_pattern = r'SET\s+(\w+)\.(\w+)\s*=\s*([^"\n]+)'
-    
+
     refunds = {}
-    for match in re.finditer(refund_pattern, EMBEDDED_ORDER_DATA):
+    for match in re.finditer(refund_pattern, cypher_content):
         var_name = match.group(1)
         refund_id = match.group(2)
         refunds[var_name] = {"id": refund_id}
-    
-    # Extract refund properties
-    for match in re.finditer(refund_set_pattern, EMBEDDED_ORDER_DATA):
+
+    for match in re.finditer(refund_set_pattern, cypher_content):
         var_name = match.group(1)
         prop = match.group(2)
         value = match.group(3).strip().strip('"').strip("'")
         if var_name in refunds:
-            # Try to parse dates and numbers
             if value.startswith('datetime('):
                 date_match = re.search(r'["\']([^"\']+)["\']', value)
                 if date_match:
                     value = date_match.group(1)
             elif value.replace('.', '').isdigit():
                 try:
-                    if '.' in value:
-                        value = float(value)
-                    else:
-                        value = int(value)
-                except:
+                    value = float(value) if '.' in value else int(value)
+                except Exception:
                     pass
             refunds[var_name][prop] = value
-    
+
     data["refunds"] = list(refunds.values())
-    
+
     return data
 
 
@@ -842,15 +491,9 @@ def load_cypher_data(file_path: str | Path | None = None, clear_existing: bool =
     if not driver:
         raise RuntimeError("Neo4j driver is not initialized. Neo4j is required for this application.")
     
-    # Use embedded data if no file path provided and use_embedded is True
-    if file_path is None and use_embedded:
-        statements = parse_cypher_string(EMBEDDED_ORDER_DATA)
-        source = "embedded data"
-    elif file_path is None:
-        raise ValueError("Either file_path must be provided or use_embedded must be True")
-    else:
-        statements = parse_cypher_file(file_path)
-        source = str(file_path)
+    target_path = Path(file_path) if file_path else DATA_CYPHER_PATH
+    statements = parse_cypher_file(target_path)
+    source = str(target_path)
     
     if not statements:
         return {
@@ -922,15 +565,9 @@ async def load_cypher_data_async(file_path: str | Path | None = None, clear_exis
     if not driver:
         raise RuntimeError("Neo4j driver is not initialized. Neo4j is required for this application.")
     
-    # Use embedded data if no file path provided and use_embedded is True
-    if file_path is None and use_embedded:
-        statements = parse_cypher_string(EMBEDDED_ORDER_DATA)
-        source = "embedded data"
-    elif file_path is None:
-        raise ValueError("Either file_path must be provided or use_embedded must be True")
-    else:
-        statements = parse_cypher_file(file_path)
-        source = str(file_path)
+    target_path = Path(file_path) if file_path else DATA_CYPHER_PATH
+    statements = parse_cypher_file(target_path)
+    source = str(target_path)
     
     if not statements:
         return {
@@ -1280,7 +917,7 @@ async def check_return_eligibility(order_id: str) -> Dict[str, Any]:
                 "eligible": False,
                 "reason": "Order not found",
                 "daysSincePurchase": None,
-                "returnPolicyDays": 30
+                "returnPolicyDays": 300
             }
         
         order_date = record["orderDate"]
@@ -1308,7 +945,7 @@ async def check_return_eligibility(order_id: str) -> Dict[str, Any]:
         days_since_purchase = (today - order_date_py).days
         
         # Check eligibility
-        return_policy_days = 30
+        return_policy_days = 300
         eligible = days_since_purchase <= return_policy_days
         
         # Additional checks
@@ -1317,14 +954,13 @@ async def check_return_eligibility(order_id: str) -> Dict[str, Any]:
             reasons.append(f"Order is {days_since_purchase} days old, exceeds {return_policy_days} day return policy")
         
         if status == "Delivered":
-            # Can only return delivered orders
             pass
         elif status in ["Cancelled", "Refunded"]:
             eligible = False
             reasons.append(f"Order status is {status}, cannot return")
-        elif status in ["Processing", "Pending"]:
+        else:
             eligible = False
-            reasons.append(f"Order status is {status}, must be delivered first")
+            reasons.append(f"Order status is {status}, order must be delivered before it can be returned")
         
         return {
             "orderId": order_id,
@@ -1553,8 +1189,8 @@ async def get_return_policy() -> Dict[str, Any]:
 
     if not record:
         return {
-            "returnPolicyDays": 30,
-            "description": "Returns are accepted within 30 days of purchase date",
+            "returnPolicyDays": 300,
+            "description": "Returns are accepted within 300 days of purchase date",
             "conditions": [
                 "Item must be in original condition",
                 "Original packaging preferred",
@@ -1569,7 +1205,7 @@ async def get_return_policy() -> Dict[str, Any]:
 
     return {
         "id": record.get("id"),
-        "returnPolicyDays": int(record.get("returnWindowDays", 30)),
+        "returnPolicyDays": int(record.get("returnWindowDays", 300)),
         "description": record.get("description"),
         "restockingFee": float(record.get("restockingFee", 0.0)),
         "contactEmail": record.get("contactEmail"),

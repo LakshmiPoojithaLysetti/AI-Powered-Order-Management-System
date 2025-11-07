@@ -17,17 +17,24 @@ const neo4jDetails = document.getElementById("neo4jDetails");
 const orderPanelBtn = document.getElementById("orderPanelBtn");
 const orderPanel = document.getElementById("orderPanel");
 const orderPanelToggle = document.getElementById("orderPanelToggle");
-const orderSearch = document.getElementById("orderSearch");
-const searchOrdersBtn = document.getElementById("searchOrdersBtn");
 const orderList = document.getElementById("orderList");
 const orderDetailsSection = document.getElementById("orderDetailsSection");
 const orderDetailsContent = document.getElementById("orderDetailsContent");
 const closeOrderDetails = document.getElementById("closeOrderDetails");
+const reviewOverlay = document.getElementById("reviewOverlay");
+const reviewModalMessage = document.getElementById("reviewModalMessage");
+const reviewModalOrderId = document.getElementById("reviewModalOrderId");
+const reviewModalAmount = document.getElementById("reviewModalAmount");
+const reviewModalReason = document.getElementById("reviewModalReason");
+const reviewApproveBtn = document.getElementById("reviewApproveBtn");
+const reviewRejectBtn = document.getElementById("reviewRejectBtn");
+const reviewCloseBtn = document.getElementById("reviewCloseBtn");
 
 let isWaitingForHumanInput = false;
 let panelCollapsed = false;
 let orderPanelCollapsed = false;
 let selectedOrder = null;
+let currentReviewContext = null;
 let cachedOrders = [];
 
 // ============================================================================
@@ -37,7 +44,7 @@ let cachedOrders = [];
 document.addEventListener("DOMContentLoaded", () => {
   setupEventListeners();
   checkNeo4jStatus();
-  renderOrderSearchPrompt();
+  renderOrderListPlaceholder();
   // Check status every 30 seconds
   setInterval(checkNeo4jStatus, 30000);
 });
@@ -62,25 +69,46 @@ function setupEventListeners() {
     orderPanelToggle.addEventListener("click", toggleOrderPanel);
   }
   
-  if (searchOrdersBtn) {
-    searchOrdersBtn.addEventListener("click", () => loadOrders(orderSearch?.value));
-  }
-  
-  if (orderSearch) {
-    orderSearch.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        loadOrders(orderSearch.value);
-      }
-    });
-  }
-  
   if (closeOrderDetails) {
     closeOrderDetails.addEventListener("click", () => {
       orderDetailsSection.style.display = "none";
       selectedOrder = null;
     });
   }
+
+  if (reviewApproveBtn) {
+    reviewApproveBtn.addEventListener("click", () => {
+      if (currentReviewContext) {
+        handleHumanInput("approve", currentReviewContext.orderId, currentReviewContext.returnRequestId);
+      }
+    });
+  }
+
+  if (reviewRejectBtn) {
+    reviewRejectBtn.addEventListener("click", () => {
+      if (currentReviewContext) {
+        handleHumanInput("reject", currentReviewContext.orderId, currentReviewContext.returnRequestId);
+      }
+    });
+  }
+
+  if (reviewCloseBtn) {
+    reviewCloseBtn.addEventListener("click", () => hideReviewModal(false));
+  }
+
+  if (reviewOverlay) {
+    reviewOverlay.addEventListener("click", (event) => {
+      if (event.target === reviewOverlay) {
+        hideReviewModal(false);
+      }
+    });
+  }
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && reviewOverlay && !reviewOverlay.classList.contains("hidden")) {
+      hideReviewModal(false);
+    }
+  });
   
   input.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -88,6 +116,70 @@ function setupEventListeners() {
       send();
     }
   });
+}
+
+function showReviewModal(details = null) {
+  if (!reviewOverlay) return;
+
+  const context = details || currentReviewContext || {};
+  currentReviewContext = {
+    orderId: context.orderId || context.order_id || null,
+    amount: context.amount ?? null,
+    reason: context.reason || null,
+    returnRequestId: context.returnRequestId || context.return_request_id || context.refundId || null,
+    message: context.message || null
+  };
+
+  if (reviewModalMessage) {
+    reviewModalMessage.textContent =
+      currentReviewContext.message ||
+      "A refund request requires your approval before it can be processed.";
+  }
+
+  if (reviewModalOrderId) {
+    reviewModalOrderId.textContent = currentReviewContext.orderId || "—";
+  }
+
+  if (reviewModalAmount) {
+    const amountValue =
+      currentReviewContext.amount !== null &&
+      currentReviewContext.amount !== undefined &&
+      !Number.isNaN(Number(currentReviewContext.amount))
+        ? `$${Number(currentReviewContext.amount).toLocaleString("en-US", {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+          })}`
+        : "—";
+
+    reviewModalAmount.textContent = amountValue;
+    if (amountValue !== "—") {
+      reviewModalAmount.classList.add("amount");
+    } else {
+      reviewModalAmount.classList.remove("amount");
+    }
+  }
+
+  if (reviewModalReason) {
+    reviewModalReason.textContent = currentReviewContext.reason || "Customer request";
+  }
+
+  reviewOverlay.classList.remove("hidden");
+  reviewOverlay.setAttribute("aria-hidden", "false");
+
+  requestAnimationFrame(() => {
+    if (reviewApproveBtn) {
+      reviewApproveBtn.focus();
+    }
+  });
+}
+
+function hideReviewModal(resetContext = true) {
+  if (!reviewOverlay) return;
+  reviewOverlay.classList.add("hidden");
+  reviewOverlay.setAttribute("aria-hidden", "true");
+  if (resetContext) {
+    currentReviewContext = null;
+  }
 }
 
 // ============================================================================
@@ -322,6 +414,17 @@ function renderReviewContent(content) {
   actions.appendChild(approveBtn);
   actions.appendChild(rejectBtn);
   container.appendChild(actions);
+
+  if (isRefund) {
+    const modalDetails = {
+      message,
+      orderId,
+      amount,
+      reason,
+      returnRequestId
+    };
+    queueMicrotask(() => showReviewModal(modalDetails));
+  }
   
   return container;
 }
@@ -372,15 +475,22 @@ async function send() {
   
   // Allow sending approve/reject messages even when waiting for human input
   const isApprovalMessage = /^(approve|reject|yes|no|y|n|cancel)$/i.test(message);
-  if (isWaitingForHumanInput && !isApprovalMessage) {
-    // Show hint to user
-    const hint = document.createElement("div");
-    hint.className = "approval-hint";
-    hint.textContent = "Please use the Approve/Reject buttons above, or type 'approve' or 'reject'";
-    hint.style.cssText = "color: var(--warning); padding: 8px; margin: 8px 0; font-size: 12px; background: rgba(245, 158, 11, 0.1); border-radius: 4px;";
-    chat.appendChild(hint);
-    setTimeout(() => hint.remove(), 3000);
-    return;
+  if (isWaitingForHumanInput) {
+    if (isApprovalMessage) {
+      hideReviewModal();
+    } else {
+      if (currentReviewContext) {
+        showReviewModal(currentReviewContext);
+      }
+      // Show hint to user
+      const hint = document.createElement("div");
+      hint.className = "approval-hint";
+      hint.textContent = "Please use the Approve/Reject buttons above, or type 'approve' or 'reject'";
+      hint.style.cssText = "color: var(--warning); padding: 8px; margin: 8px 0; font-size: 12px; background: rgba(245, 158, 11, 0.1); border-radius: 4px;";
+      chat.appendChild(hint);
+      setTimeout(() => hint.remove(), 3000);
+      return;
+    }
   }
 
   addMessage("user", message);
@@ -408,6 +518,11 @@ async function send() {
 
     const data = await res.json();
     console.log("API Response:", data);
+    if (data.redirectUrl) {
+      setTimeout(() => {
+        window.location.href = data.redirectUrl;
+      }, 600);
+    }
     
     hideTyping();
 
@@ -453,6 +568,7 @@ async function send() {
       }
       
       addMessage("assistant", refundData, "review");
+    showReviewModal(refundData);
       responseDisplayed = true;
     } else if (data.parsed_query) {
       addMessage("assistant", data.parsed_query, "table");
@@ -508,6 +624,7 @@ async function send() {
 async function handleHumanInput(decision, orderId, returnRequestId) {
   if (!isWaitingForHumanInput) return;
   
+  hideReviewModal();
   isWaitingForHumanInput = false;
   
   // Reset input styling
@@ -605,22 +722,19 @@ function toggleOrderPanel() {
     } else {
       orderPanel.classList.remove("collapsed");
       if (orderPanelToggle) orderPanelToggle.textContent = "✕";
-      if (orderList && orderList.children.length === 0) {
-        renderOrderSearchPrompt();
-      }
+      renderOrderListPlaceholder();
     }
   }
 }
 
-function renderOrderSearchPrompt() {
+function renderOrderListPlaceholder() {
   if (!orderList) return;
   
   orderList.innerHTML = `
-    <div class="order-search-prompt">
-      <div class="prompt-title">Search orders</div>
-      <div class="prompt-text">
-        Enter an order ID, customer name, tracking number, or status to locate a specific order.
-      </div>
+    <div class="order-empty-state">
+      <div class="empty-icon">📭</div>
+      <h4>No order selected</h4>
+      <p>Ask about an order in the conversation to view its details here.</p>
     </div>
   `;
 }
@@ -628,13 +742,7 @@ function renderOrderSearchPrompt() {
 async function loadOrders(searchQuery = "") {
   if (!orderList) return;
   
-  const query = (searchQuery || "").trim();
-  if (!query) {
-    renderOrderSearchPrompt();
-    return;
-  }
-  
-  orderList.innerHTML = `<div class="loading-orders">Searching for "${query}"...</div>`;
+  orderList.innerHTML = `<div class="loading-orders">Loading latest orders...</div>`;
   
   try {
     const res = await fetch("/api/orders");
@@ -647,25 +755,12 @@ async function loadOrders(searchQuery = "") {
     
     // Filter orders if search query provided
     let filteredOrders = orders;
-    if (query) {
-      const lowered = query.toLowerCase();
-      filteredOrders = orders.filter(order => 
-        order.orderId?.toLowerCase().includes(lowered) ||
-        order.status?.toLowerCase().includes(lowered) ||
-        order.customerName?.toLowerCase().includes(lowered) ||
-        order.tracking?.toLowerCase().includes(lowered)
-      );
-    }
+    filteredOrders = orders;
 
     cachedOrders = filteredOrders;
     
     if (filteredOrders.length === 0) {
-      orderList.innerHTML = `
-        <div class="no-orders">
-          No orders found for "<strong>${query}</strong>".
-          <div class="no-orders-hint">Verify the ID or try a different search term.</div>
-        </div>
-      `;
+      renderOrderListPlaceholder();
       return;
     }
     

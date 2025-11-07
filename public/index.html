@@ -29,12 +29,6 @@
               <option value="email">📧 Email</option>
             </select>
           </div>
-          <button id="orderPanelBtn" class="icon-btn" title="Order Management" aria-label="Orders">
-            📦
-          </button>
-          <button id="settingsBtn" class="icon-btn" title="System Settings" aria-label="Settings">
-            ⚙️
-          </button>
           <button id="clearBtn" class="icon-btn" title="Clear conversation" aria-label="Clear">
             🗑️
           </button>
@@ -44,76 +38,11 @@
 
     <!-- Main Content -->
     <div class="main-container">
-      <!-- System Management Sidebar -->
-      <aside class="system-panel" id="systemPanel">
-        <div class="panel-header">
-          <h3>🔧 System Management</h3>
-          <button class="toggle-btn" id="panelToggle" title="Toggle panel">✕</button>
-        </div>
-        
-        <div class="panel-content">
-          <!-- Neo4j Section -->
-          <section class="panel-section">
-            <h4 class="section-title">
-              <span class="section-icon">🗄️</span>
-              Neo4j Database
-            </h4>
-            
-            <div class="status-card" id="neo4jStatusCard">
-              <div class="status-card-header">
-                <span class="status-label">Connection Status</span>
-                <span class="status-badge" id="neo4jStatusBadge">Checking...</span>
-              </div>
-              <div class="status-details" id="neo4jDetails">
-                <p>Verifying connection...</p>
-              </div>
-            </div>
-          </section>
-        </div>
-      </aside>
-      
-      <!-- Order Management Panel -->
-      <aside class="order-panel" id="orderPanel">
-        <div class="order-panel-header">
-          <h3>📦 Order Management</h3>
-          <button class="toggle-btn" id="orderPanelToggle" title="Toggle order panel">✕</button>
-        </div>
-        <div class="order-panel-content">
-          <!-- Order Search -->
-          <div class="order-search-section">
-            <div class="search-input-group">
-              <input 
-                type="text" 
-                id="orderSearch" 
-                class="order-search-input"
-                placeholder="Search orders by ID, customer, or status..."
-                autocomplete="off"
-              />
-              <button id="searchOrdersBtn" class="search-btn" title="Search orders">🔍</button>
-            </div>
-            <div class="order-list" id="orderList">
-              <div class="loading-orders">Loading orders...</div>
-            </div>
-          </div>
-          
-          <!-- Selected Order Details -->
-          <div class="order-details-section" id="orderDetailsSection" style="display: none;">
-            <div class="order-details-header">
-              <h4>Order Details</h4>
-              <button class="close-details-btn" id="closeOrderDetails" title="Close details">✕</button>
-            </div>
-            <div class="order-details-content" id="orderDetailsContent">
-              <!-- Order details will be populated here -->
-            </div>
-          </div>
-        </div>
-      </aside>
-      
       <!-- Chat Container -->
       <main class="chat-container" id="chat">
         <div class="empty-state" id="emptyState">
           <div class="empty-icon">💬</div>
-          <h2>Welcome to Innovator Copilot</h2>
+          <h2>Welcome to Copilot</h2>
           <p>Ask about orders or get order information.</p>
           <div class="empty-suggestions">
             <p>Try asking:</p>
@@ -142,6 +71,42 @@
         </button>
       </div>
     </footer>
+  </div>
+
+  <!-- Refund Approval Modal -->
+  <div id="reviewOverlay" class="review-overlay hidden" aria-hidden="true">
+    <div class="review-modal" role="dialog" aria-modal="true" aria-labelledby="reviewModalTitle">
+      <button class="review-modal-close" id="reviewCloseBtn" aria-label="Close review dialog">✕</button>
+      <div class="review-modal-icon">💰</div>
+      <h2 class="review-modal-title" id="reviewModalTitle">Refund Approval Required</h2>
+      <p class="review-modal-message" id="reviewModalMessage">
+        A refund request requires your approval.
+      </p>
+      <div class="review-modal-info">
+        <div class="review-info-row">
+          <span class="info-label">Order ID</span>
+          <span class="info-value" id="reviewModalOrderId">—</span>
+        </div>
+        <div class="review-info-row">
+          <span class="info-label">Amount</span>
+          <span class="info-value" id="reviewModalAmount">—</span>
+        </div>
+        <div class="review-info-row">
+          <span class="info-label">Reason</span>
+          <span class="info-value" id="reviewModalReason">—</span>
+        </div>
+      </div>
+      <div class="review-modal-actions">
+        <button class="review-modal-btn reject" id="reviewRejectBtn">
+          <span class="btn-icon">✗</span>
+          <span class="btn-label">Reject</span>
+        </button>
+        <button class="review-modal-btn approve" id="reviewApproveBtn">
+          <span class="btn-icon">✓</span>
+          <span class="btn-label">Approve</span>
+        </button>
+      </div>
+    </div>
   </div>
 
   <script src="app.js"></script>

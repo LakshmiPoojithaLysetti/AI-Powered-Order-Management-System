@@ -41,6 +41,8 @@ class GraphState(TypedDict):
     current_activity: Optional[str]
     workflow_data: Optional[Dict[str, Any]]
     review_message: Optional[str]
+    redirect_url: Optional[str]
+    workflow_complete: Optional[bool]
 
 
 # ============================================================================
@@ -86,8 +88,8 @@ def classify_intent(text: str, entities: Dict[str, Any]) -> str:
     if re.search(r'\b(track|tracking|where is|location|shipment)\b', text_lower) and order_id:
         return "track_order"
     
-    # Status queries
-    if re.search(r'\b(status|check|what.*status|how.*order)\b', text_lower) and order_id:
+    # Status-related queries (includes carrier questions)
+    if re.search(r'\b(status|check|what.*status|how.*order|carrier|shipper|shipping company)\b', text_lower) and order_id:
         return "order_status"
     
     # Refund queries
@@ -111,8 +113,7 @@ def classify_intent(text: str, entities: Dict[str, Any]) -> str:
 # ============================================================================
 
 llm = ChatOpenAI(
-    model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),  # type: ignore[call-arg]
-    temperature=0.7
+    model=os.getenv("OPENAI_MODEL", "gpt-4o-mini")  # type: ignore[call-arg]
 )
 
 
@@ -234,44 +235,46 @@ def tool_task_node(state: GraphState) -> GraphState:
         if intent == "order_status" and order_id:
             import asyncio
             tool_result = asyncio.run(lookup_order_status(order_id))
-        
         elif intent == "order_price" and order_id:
             import asyncio
             from tools.order_tools import get_order_price
             tool_result = asyncio.run(get_order_price(order_id))
-        
         elif intent == "track_order" and order_id:
             import asyncio
             tool_result = asyncio.run(track_order(order_id))
-        
         elif intent == "refund" and order_id:
             import asyncio
-            # Extract reason from input if available
             reason = None
             if "reason" in input_text.lower() or "because" in input_text.lower():
-                # Try to extract reason from input
                 reason_match = re.search(r'(?:reason|because)[:\s]+(.+?)(?:\.|$)', input_text, re.IGNORECASE)
                 if reason_match:
                     reason = reason_match.group(1).strip()
-            
-            # Process refund - ALWAYS requires human approval
+
             tool_result = asyncio.run(process_refund(order_id, reason=reason))
-            
-            # Set human review flag if refund requires approval
+
             if tool_result and tool_result.get("needsHumanReview", False):
                 state["needs_human_review"] = True
-                # Store review message for frontend
                 state["review_message"] = tool_result.get("message", "Refund request requires approval.")
-        
+                is_delivered = (
+                    tool_result.get("eligibility", {}).get("status") == "Delivered"
+                    if tool_result.get("eligibility") else False
+                )
+                if tool_result.get("success") and tool_result.get("requiresApproval") and is_delivered:
+                    state["redirect_url"] = f"/return?orderId={order_id}"
+                else:
+                    state.pop("redirect_url", None)
+            else:
+                state.pop("redirect_url", None)
+
         if tool_result:
             state["tool_result"] = tool_result
             print(f"[ToolTask] Tool result: {tool_result.get('status', 'N/A')}, needs_review: {state.get('needs_human_review', False)}")
     except Exception as e:
         print(f"[ToolTask] Error executing tool: {e}")
         state["tool_result"] = {"error": str(e)}
-    
-    return state
 
+    return state
+        
 
 def router_task_node(state: GraphState) -> GraphState:
     """Router task node - routes to next activity based on conditions."""
@@ -308,7 +311,7 @@ def render_task_node(state: GraphState) -> GraphState:
     if needs_review:
         print(f"[RenderTask] Skipping render - human review required")
         return state
-
+        
     response = ""
     
     if intent == "order_status" and tool_result:
@@ -316,8 +319,10 @@ def render_task_node(state: GraphState) -> GraphState:
         order_id = tool_result.get("id") or tool_result.get("orderId", "unknown")
         items = tool_result.get("items", [])
         total = tool_result.get("totalAmount", 0)
-        
+        carrier = tool_result.get("carrier")
         response = f"Order {order_id} is currently **{status}**."
+        if carrier:
+            response += f" It is being handled by **{carrier}**."
         if items:
             response += f" Order contains {len(items)} item(s)."
         if total:
@@ -343,7 +348,7 @@ def render_task_node(state: GraphState) -> GraphState:
     
     elif intent == "track_order" and tool_result:
         order_id = tool_result.get("id") or tool_result.get("orderId", "unknown")
-        tracking = tool_result.get("tracking", "N/A")
+        tracking = tool_result.get("trackingNumber") or tool_result.get("tracking") or tool_result.get("tracking_number") or "N/A"
         status = tool_result.get("status", "Unknown")
         history = tool_result.get("tracking_history", [])
         
@@ -362,13 +367,30 @@ def render_task_node(state: GraphState) -> GraphState:
         response = "Our return policy allows returns within 30 days of purchase. Shipping is free for orders over $50."
     
     elif intent == "chit_chat":
-        response = "I'm here to help with your orders, fastener searches, and policy questions. How can I assist you?"
+        response = "How can I assist you?"
     
     else:
-        response = "I'm processing your request. Please wait..."
+        response = build_default_response(intent or "", state, tool_result)
     
     state["response"] = response
     return state
+
+
+def build_default_response(intent: str, state: GraphState, tool_result: Optional[Dict[str, Any]]) -> str:
+    if intent == "refund" and tool_result:
+        order_id = state.get("entities", {}).get("orderId", "the order")
+        if tool_result.get("success") and tool_result.get("requiresApproval"):
+            if state.get("redirect_url"):
+                return "You're eligible to return order {order_id}."
+            return tool_result.get(
+                "message",
+                "This order isn't eligible for a return right now. Let me know if you need anything else."
+            )
+        return tool_result.get(
+            "message",
+            "This order isn't eligible for a return right now. Let me know if you need anything else."
+        )
+    return "I'm processing your request. Please wait..."
 
 
 def agent_task_node(state: GraphState) -> GraphState:
@@ -429,12 +451,13 @@ def user_task2_node(state: GraphState) -> GraphState:
             # Approval granted - approve the return request
             import asyncio
             from tools.order_tools import approve_return
-            
+
             try:
                 approval_result = asyncio.run(approve_return(return_request_id, approved=True))
-                
+
                 if approval_result and approval_result.get("success", False):
                     state["needs_human_review"] = False
+                    state["workflow_complete"] = True  # Mark workflow as complete
                     state["response"] = (
                         f"✅ **Refund Approved**\n\nYour refund request for order {order_id} (${amount:,.2f}) has been "
                         "approved and is being processed. The refund will be credited to your original payment method within "
@@ -442,36 +465,40 @@ def user_task2_node(state: GraphState) -> GraphState:
                     )
                 else:
                     state["needs_human_review"] = False
+                    state["workflow_complete"] = True  # Mark workflow as complete
                     state["response"] = "❌ Error approving refund request. Please contact support."
             except Exception as e:
                 print(f"[UserTask2] Error approving refund: {e}")
                 state["needs_human_review"] = False
                 state["response"] = f"❌ Error processing approval: {str(e)}"
-        
+
         elif user_response and user_response.lower().strip() in ["no", "n", "reject", "cancel", "rejected"]:
             # Rejection - reject the return request
             import asyncio
             from tools.order_tools import approve_return
-            
+
             try:
                 rejection_result = asyncio.run(approve_return(return_request_id, approved=False))
-                
+
                 if rejection_result and rejection_result.get("success", False):
                     state["needs_human_review"] = False
+                    state["workflow_complete"] = True  # Mark workflow as complete
                     state["response"] = (
                         f"❌ **Refund Rejected**\n\nYour refund request for order {order_id} has been rejected. "
                         "If you have questions, please contact customer support."
                     )
                 else:
                     state["needs_human_review"] = False
+                    state["workflow_complete"] = True  # Mark workflow as complete
                     state["response"] = f"Your refund request for order {order_id} has been cancelled."
             except Exception as e:
                 print(f"[UserTask2] Error rejecting refund: {e}")
                 state["needs_human_review"] = False
+                state["workflow_complete"] = True  # Mark workflow as complete
                 state["response"] = f"Your refund request for order {order_id} has been cancelled."
-        
+
         else:
-            # Still waiting for human input - show approval request
+            # Still waiting for human input - show approval request (will pause here)
             state["needs_human_review"] = True
             reason = tool_result.get('reason', 'Customer request') if tool_result else 'Customer request'
             state["response"] = (
@@ -487,9 +514,11 @@ def user_task2_node(state: GraphState) -> GraphState:
         # Not a refund, handle other review cases
         if user_response and user_response.lower() in ["yes", "y", "approve", "confirm"]:
             state["needs_human_review"] = False
+            state["workflow_complete"] = True
             state["response"] = "Your request has been approved and is being processed."
         elif user_response and user_response.lower() in ["no", "n", "reject", "cancel"]:
             state["needs_human_review"] = False
+            state["workflow_complete"] = True
             state["response"] = "Your request has been cancelled."
         else:
             state["needs_human_review"] = True
@@ -605,6 +634,32 @@ def build_from_copilot_json(json_path: str | Path = "workflow.json", checkpointe
                 },
             )
             conditional_nodes.add(source_node)
+        elif source_node == "UserTask2":
+            # Add conditional edge for UserTask2 to handle cycle breaking
+            if source_node in conditional_nodes:
+                continue
+
+            def user_task2_route(state: GraphState) -> Literal["LLMTask1", "__end__"]:
+                # If review is complete (user provided input and review flag is cleared), end
+                # Otherwise, loop back to LLMTask1
+                needs_review = state.get("needs_human_review", False)
+                if needs_review:
+                    # Still waiting for input, end the workflow (pause for HITL)
+                    return "__end__"
+                else:
+                    # Review complete, can loop back for follow-up if needed
+                    # But for now, terminate to avoid infinite loops
+                    return "__end__"
+
+            workflow_graph.add_conditional_edges(
+                source_node,
+                user_task2_route,
+                {
+                    "LLMTask1": target_node,
+                    "__end__": END,
+                },
+            )
+            conditional_nodes.add(source_node)
         else:
             workflow_graph.add_edge(source_node, target_node)
 
@@ -675,6 +730,8 @@ def initial_state(input_text: str, channel: str = "chat") -> GraphState:
         response=None,
         current_activity=None,
         workflow_data=None,
-        review_message=None
+        review_message=None,
+        redirect_url=None,
+        workflow_complete=False
     )
 

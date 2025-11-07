@@ -317,52 +317,57 @@ async def track_order(order_id: Optional[str]) -> Optional[Dict[str, Any]]:
     expected_delivery = delivery_info.get("expectedDelivery") if delivery_info else order.get("expectedDelivery")
     
     # Get tracking history from Neo4j (from data.cypher)
-    def _convert_value(value):
-        """Convert Neo4j date/datetime objects to strings."""
-        if value is None:
-            return None
-        if hasattr(value, 'iso_format'):
-            return value.iso_format()
-        if hasattr(value, 'to_native'):
-            native = value.to_native()
-            if hasattr(native, 'isoformat'):
-                return native.isoformat()
-            return str(native)
-        if hasattr(value, 'isoformat'):
-            return value.isoformat()
-        return value
-    
-    def _work(session):
-        try:
-            result = session.run(
-                """
-                MATCH (o:Order {id: $order_id})-[:HAS_TRACKING]->(t:TrackingEvent)
-                RETURN t.date AS date, t.location AS location, t.status AS status
-                ORDER BY t.date DESC
-                LIMIT 10
-                """,
-                {"order_id": order_id}
-            )
-            history = []
-            for record in result:
-                date_val = _convert_value(record.get("date"))
-                history.append({
-                    "date": date_val,
-                    "location": record.get("location"),
-                    "status": record.get("status")
-                })
-            return history
-        except Exception as e:
-            print(f"[neo4j] Error retrieving tracking history: {e}")
-            return []
-    
-    history = await async_with_session(_work)
-    
+    async def _get_tracking_history() -> List[Dict[str, Any]]:
+        def _convert_value(value):
+            """Convert Neo4j date/datetime objects to strings."""
+            if value is None:
+                return None
+            if hasattr(value, "iso_format"):
+                return value.iso_format()
+            if hasattr(value, "to_native"):
+                native = value.to_native()
+                if hasattr(native, "isoformat"):
+                    return native.isoformat()
+                return str(native)
+            if hasattr(value, "isoformat"):
+                return value.isoformat()
+            return value
+
+        def _work(session):
+            try:
+                result = session.run(
+                    """
+                    MATCH (o:Order {id: $order_id})-[:HAS_TRACKING]->(t:TrackingEvent)
+                    RETURN t.date AS date, t.location AS location, t.status AS status
+                    ORDER BY t.date DESC
+                    LIMIT 10
+                    """,
+                    {"order_id": order_id}
+                )
+                history: List[Dict[str, Any]] = []
+                for record in result:
+                    date_val = _convert_value(record.get("date"))
+                    history.append(
+                        {
+                            "date": date_val,
+                            "location": record.get("location"),
+                            "status": record.get("status"),
+                        }
+                    )
+                return history
+            except Exception as e:
+                print(f"[neo4j] Error retrieving tracking history: {e}")
+                return []
+
+        return await async_with_session(_work)
+
+    history = await _get_tracking_history()
+
     # Get current location from most recent tracking event
     current_location = "Unknown"
-    if history and len(history) > 0:
+    if history:
         current_location = history[0].get("location", "Unknown")
-    
+
     # Create tracking response from order data (from data.cypher)
     tracking = {
         "orderId": order.get("id"),
@@ -372,9 +377,9 @@ async def track_order(order_id: Optional[str]) -> Optional[Dict[str, Any]]:
         "currentLocation": current_location,
         "estimatedDelivery": expected_delivery,
         "lastUpdate": datetime.now().isoformat(),
-        "trackingHistory": history if history else []
+        "trackingHistory": history if history else [],
     }
-    
+
     return tracking
 
 

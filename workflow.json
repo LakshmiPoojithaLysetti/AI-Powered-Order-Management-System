@@ -1,21 +1,4 @@
 {
-  "_comments": {
-    "note": "JSON does not support native comments. This `_comments` section documents the config without breaking JSON parsers.",
-    "id": "Unique workflow identifier.",
-    "title": "Human-readable name for the agent/workflow.",
-    "description": "Short description of what this workflow does.",
-    "color": "Hex color used for UI representation.",
-    "sampleQuestions": "Seed prompts/questions shown to users.",
-    "stateSchema": "List of state variables (name, type, default).",
-    "agentType": "Agent mode; e.g., Conversational.",
-    "plannerType": "Planner selection; e.g., Manual or Automatic.",
-    "executionContext": "Who initiates actions; e.g., User or System.",
-    "StartActivityId": "Activity id where the graph starts.",
-    "Diagram": "Canvas/viewport metadata for editor positioning.",
-    "WorkflowActivities": "List of nodes (tasks) in the workflow graph.",
-    "WorkflowConnections": "Directed edges connecting activities by id.",
-    "team": "Optional team/owner for this workflow."
-  },
   "id": 1762408066447,
   "title": "Test Agent",
   "description": "Agent to test all task types in the workflow.",

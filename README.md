@@ -1,18 +1,23 @@
 # 🔧 Copilot - AI-Powered Order Management System
 
-An intelligent workflow orchestration system built with LangGraph, FastAPI, and Neo4j that provides AI-powered order management, fastener search, and policy assistance capabilities.
+An intelligent workflow orchestration system built with LangGraph, FastAPI, and Neo4j that provides AI-powered order management with human-in-the-loop refund approvals and real-time order tracking.
 
 ## ✨ Features
 
 ### Order Management
-- **Order Status**: Check order status with detailed information
-- **Order Tracking**: Track shipments with real-time location updates
-- **Order Pricing**: Get detailed price breakdowns for orders
-- **Refund Processing**: Handle refund requests with human-in-the-loop approval
+- **Order Status & Tracking**: Check order status with carrier information and real-time location updates
+- **Order Pricing**: Get detailed price breakdowns with item-level details
+- **Refund Processing**: Handle refund requests with human-in-the-loop approval workflow
+  - Automated eligibility checks (300-day return window)
+  - Status validation (only delivered orders can be returned)
+  - Interactive approval modal for user confirmation
+  - Automatic redirect to return page for eligible orders
 
-### Fastener Search
-- Intelligent search for screws, bolts, nuts, and hardware parts
-- Natural language query processing
+### AI-Powered Chat Interface
+- Natural language order queries
+- Intent classification with entity extraction
+- Markdown-formatted responses
+- Persistent conversation history with Neo4j
 
 ### Policy Assistant
 - Answer questions about warranty, shipping, and return policies
@@ -21,63 +26,87 @@ An intelligent workflow orchestration system built with LangGraph, FastAPI, and 
 ## 🏗️ Architecture
 
 ```
-┌─────────────┐
-│   Client    │ (HTML/CSS/JS)
-└──────┬──────┘
-       │
-┌──────▼──────┐
-│  FastAPI    │ (REST API)
-│   Server    │
-└──────┬──────┘
-       │
-┌──────▼──────────────────┐
-│   LangGraph Workflow    │
-│   Orchestration Engine   │
-└──────┬───────────────────┘
-       │
-┌──────▼──────┐    ┌──────────────┐
-│   Neo4j     │    │   OpenAI     │
-│  Database   │    │     LLM      │
-└─────────────┘    └──────────────┘
+┌─────────────────────┐
+│   Client (React)    │ HTML/CSS/JS + Modal UI
+└──────────┬──────────┘
+           │
+┌──────────▼──────────┐
+│   FastAPI Server    │ REST API + Static Files
+└──────────┬──────────┘
+           │
+┌──────────▼───────────────────────┐
+│   LangGraph Workflow Engine      │
+│   (Orchestration with Cycles)    │
+└──────────┬───────────────────────┘
+           │
+┌──────────▼─────────┐    ┌──────────────┐
+│   Neo4j Database   │    │   OpenAI     │
+│   (data.cypher)    │    │   GPT-4o     │
+└────────────────────┘    └──────────────┘
 ```
-
-For detailed workflow diagrams, see [WORKFLOW_DIAGRAM.md](WORKFLOW_DIAGRAM.md).
 
 ## 🔄 Workflow Engine (workflow.json)
 
-The end-to-end conversation flow is orchestrated by `workflow.json`, authored in the Microsoft Copilot format. Each activity in the JSON maps to a LangGraph node in `graph.py`.
+The conversation flow is orchestrated by `workflow.json` (Microsoft Copilot format), which maps to LangGraph nodes in `graph.py`. The workflow supports **cyclic connections** with proper termination conditions to handle complex multi-step interactions.
 
 | Activity (workflow.json) | Node Function (`graph.py`) | Purpose |
 | ------------------------ | -------------------------- | ------- |
-| `Start`                  | `start_node`               | Receives the incoming REST/chat request and seeds initial state. |
-| `UserTask1`              | `user_task_node`           | Performs intake, extracts entities, and runs schema validation (Pydantic-style checks via `validate_order_schema`). |
-| `RetrievalTask1`         | `retrieval_task_node`      | Pulls supporting documents (policy snippets, catalog info) from Neo4j when required. |
-| `LLMTask1`               | `llm_task_node`            | Normalises user intent with LangChain’s `ChatOpenAI`, refining entities and intent labels. |
-| `ToolTask1`              | `tool_task_node`           | Executes deterministic tools in `tools/order_tools.py` (status lookup, pricing, tracking, tax, shipping, coupon, fraud). |
-| `RouterTask1`            | `router_task_node`         | Applies routing conditions to decide whether to render a response, escalate to an agent task, or pause for human approval. |
-| `RenderTask1`            | `render_task_node`         | Formats the final AI response when no human review is pending. |
-| `AgentTask1`             | `agent_task_node`          | Handles complex fastener searches or multi-step external orchestration. |
-| `UserTask2`              | `user_task2_node`          | Human-in-the-loop approval for refunds; captures yes/no decisions and resumes the graph. |
+| `Start`                  | `start_node`               | Receives incoming REST/chat request and initializes state |
+| `UserTask1`              | `user_task_node`           | Performs intake, entity extraction, and schema validation |
+| `RetrievalTask1`         | `retrieval_task_node`      | Retrieves policy documents and catalog info from Neo4j |
+| `LLMTask1`               | `llm_task_node`            | Normalizes user intent using ChatOpenAI, refining entities and intent labels |
+| `ToolTask1`              | `tool_task_node`           | Executes deterministic tools (status lookup, pricing, tracking, refund eligibility) |
+| `RouterTask1`            | `router_task_node`         | Routes to render, agent, or human review based on state conditions |
+| `RenderTask1`            | `render_task_node`         | Formats final AI response with markdown support |
+| `AgentTask1`             | `agent_task_node`          | Handles complex multi-step operations (future: fastener search, inventory) |
+| `UserTask2`              | `user_task2_node`          | **Human-in-the-loop approval** for refunds with conditional cycle termination |
 
 ### Execution Flow
-1. **Start → Intake:** The HTTP/chat request enters the `Start` node, then `UserTask1` performs schema validation and entity extraction.
-2. **Retrieval & Intent Normalisation:** `RetrievalTask1` fetches additional context when the intent is policy-oriented. `LLMTask1` uses the LLM to refine the intent and entities.
-3. **Tool Execution:** `ToolTask1` invokes Neo4j-backed functions (order status, pricing, shipping, refunds) sourced entirely from `data.cypher` via `neo4j_module.py`.
-4. **Routing:** `RouterTask1` checks the state:
-   - If a refund requires human approval, the graph transitions to `UserTask2`.
-   - Fastener or multi-system operations route to `AgentTask1`.
-   - Otherwise the response proceeds to `RenderTask1`.
-5. **Human Review Loop:** When `UserTask2` collects an approval or rejection, the graph loops back to `LLMTask1` to re-assess state and finish execution.
-6. **Render:** `RenderTask1` composes the markdown/plaintext response returned to the client.
 
-Conditional edges in `workflow.json` (for `RouterTask1`) are respected one-to-one in `graph.py`, guaranteeing that edits to the JSON immediately alter the LangGraph behaviour without additional code changes.
+1. **Start → Intake**: HTTP/chat request enters via `Start`, then `UserTask1` validates schema and extracts entities (e.g., order IDs)
+
+2. **Retrieval & Intent Normalization**: 
+   - `RetrievalTask1` fetches policy context when needed
+   - `LLMTask1` uses LLM to classify intent and refine entities
+
+3. **Tool Execution**: `ToolTask1` invokes Neo4j-backed functions from `tools/order_tools.py`:
+   - Order status/tracking from `data.cypher`
+   - Price calculation with item breakdown
+   - Refund eligibility check (300-day window, delivered status)
+
+4. **Routing**: `RouterTask1` checks state and routes to:
+   - `UserTask2` if refund requires human approval
+   - `AgentTask1` for complex operations
+   - `RenderTask1` for standard responses
+
+5. **Human-in-the-Loop (HITL)**: `UserTask2` handles refund approvals:
+   - Shows approval request modal in UI
+   - Pauses workflow until user approves/rejects
+   - Uses conditional edge to terminate cycle (prevents infinite loops)
+   - Redirects to `/return` page for eligible delivered orders
+
+6. **Render**: `RenderTask1` formats markdown response with order details
+
+### Cycle Breaking Logic
+
+The workflow includes a **cyclic connection** `UserTask2 → LLMTask1` (defined in `workflow.json`), which is controlled by conditional routing:
+
+```python
+# In graph.py build_from_copilot_json()
+def user_task2_route(state):
+    if state.get("needs_human_review"):
+        return "__end__"  # Pause for user input
+    else:
+        return "__end__"  # Workflow complete
+```
+
+This prevents recursion errors while allowing the topology to support future follow-up flows.
 
 ## 📋 Prerequisites
 
-- **Python 3.9+**
+- **Python 3.10+**
 - **Neo4j Database** (version 5.x recommended)
-- **OpenAI API Key**
-- **Node.js** (for development, if needed)
+- **OpenAI API Key** (GPT-4o or GPT-4o-mini)
 
 ## 🚀 Installation
 
@@ -110,7 +139,7 @@ NEO4J_PASS=your_neo4j_password_here
 
 ### 4. Start Neo4j Database
 
-Make sure Neo4j is running and accessible at the URI specified in your `.env` file.
+Make sure Neo4j is running and accessible:
 
 ```bash
 # Using Docker
@@ -123,6 +152,15 @@ docker run -d \
 # Or use your existing Neo4j installation
 ```
 
+### 5. Seed Order Data
+
+The server automatically seeds `data.cypher` on first launch. To manually reseed:
+
+```bash
+python -c "import asyncio; from neo4j_module import seed_order_data_async; \
+asyncio.run(seed_order_data_async(clear_existing=True, use_file=False))"
+```
+
 ## 🎯 Usage
 
 ### Start the Server
@@ -131,37 +169,43 @@ docker run -d \
 python server.py
 ```
 
-The server will start on port 4000 (or the next available port if 4000 is in use). You'll see output like:
-
+Output:
 ```
-Starting server on http://0.0.0.0:4000
-Available endpoints:
-  GET  /api/chat
-  POST /api/chat
-  GET  /api/neo4j/status
-  POST /api/neo4j/load-data
+[neo4j] Successfully connected to Neo4j at bolt://localhost:7687
+[startup] Found 6 orders in database
+INFO:     Uvicorn running on http://0.0.0.0:4000 (Press CTRL+C to quit)
 ```
 
 ### Access the Web Interface
 
-Open your browser and navigate to:
-
+Open your browser:
 ```
 http://localhost:4000
 ```
 
-### Load Order Data
+### Example Interactions
 
-1. On first launch the server auto-seeds `data.cypher` into Neo4j.
-2. Use the order management panel to confirm orders are available.
+**Order Status:**
+```
+User: "check order 12345"
+AI: Order 12345 is currently **Shipped**. It is being handled by **UPS**. 
+    Order contains 1 item(s). Total amount: $199.99
+```
 
-Alternatively, load data programmatically:
+**Order Price:**
+```
+User: "price of order 67890"
+AI: The total price for order 67890 is **$349.99**.
 
-```python
-from neo4j_module import seed_order_data_async
-import asyncio
+**Item Breakdown:**
+- Product B: 1 × $249.99
+- Product C: 1 × $99.99
+```
 
-asyncio.run(seed_order_data_async(clear_existing=False))
+**Refund Request:**
+```
+User: "return order 11111"
+AI: [Redirects to /return?orderId=11111 page showing eligibility and order details]
 ```
 
 ## 📡 API Endpoints
@@ -170,31 +214,38 @@ asyncio.run(seed_order_data_async(clear_existing=False))
 
 **POST** `/api/chat`
 
-Send a message to the AI assistant.
-
 ```json
 {
-  "message": "Check order status for order 12345",
-  "channel": "chat"
+  "message": "check order 12345",
+  "channel": "chat",
+  "conversationId": "default"
 }
 ```
 
 **Response:**
 ```json
 {
-  "response": "Your order 12345 is currently **Shipped**...",
+  "conversationId": "default",
+  "response": "Order 12345 is currently **Shipped**...",
   "intent": "order_status",
-  "entities": {"orderId": "12345"}
+  "entities": {"orderId": "12345"},
+  "redirectUrl": null
 }
 ```
+
+### Return Page
+
+**GET** `/return?orderId=11111`
+
+Renders a styled HTML page showing:
+- Order details (status, date, expected delivery, price)
+- Eligibility status (based on 300-day policy and delivered status)
+- Quick actions (back to chat, contact support)
 
 ### Neo4j Status
 
 **GET** `/api/neo4j/status`
 
-Check Neo4j connection status.
-
-**Response:**
 ```json
 {
   "connected": true,
@@ -206,21 +257,9 @@ Check Neo4j connection status.
 
 **POST** `/api/neo4j/load-data`
 
-Load order data into Neo4j.
-
 ```json
 {
-  "clearExisting": false
-}
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "statements_executed": 58,
-  "total_statements": 58,
-  "errors": []
+  "clearExisting": true
 }
 ```
 
@@ -228,115 +267,219 @@ Load order data into Neo4j.
 
 ```
 copilot-workflow/
-├── graph.py                 # LangGraph workflow orchestration
-├── neo4j_module.py         # Neo4j database operations & embedded data
-├── server.py               # FastAPI server
-├── workflow.json           # Workflow configuration (Microsoft Copilot format)
+├── graph.py                 # LangGraph workflow with cycle-breaking logic
+├── neo4j_module.py         # Neo4j operations + data.cypher loader
+├── server.py               # FastAPI server with HITL support
+├── workflow.json           # Workflow topology (Microsoft Copilot format)
+├── data.cypher             # Order/customer/policy seed data
 ├── requirements.txt        # Python dependencies
 ├── .env                    # Environment variables (create this)
 ├── tools/
-│   └── order_tools.py      # Order-related operations
+│   └── order_tools.py      # Order operations (status, tracking, refunds)
 └── public/
-    ├── index.html          # Web UI
-    ├── app.js              # Frontend JavaScript
-    └── style.css           # Styling
+    ├── index.html          # Chat UI with refund approval modal
+    ├── app.js              # Frontend logic (HITL modal handling)
+    └── style.css           # Styling with modal overlay
 ```
 
 ## 🔧 Configuration
 
 ### Workflow Configuration
 
-`graph.py` automatically parses the Microsoft Copilot-flavoured `workflow.json`. Activities are converted into LangGraph nodes at runtime, and conditional edges (particularly for `RouterTask1`) are wired based on the JSON connections. Updating the JSON immediately changes the workflow without modifying Python code.
+Edit `workflow.json` to modify the workflow topology. Changes are automatically reflected in `graph.py` via `build_from_copilot_json()`.
 
-### Order Data
+**Key Features:**
+- Supports cyclic connections (e.g., `UserTask2 → LLMTask1`)
+- Conditional edges for `RouterTask1` and `UserTask2`
+- Automatic terminal node detection (nodes without outgoing edges → `END`)
 
-Order data is embedded in `neo4j_module.py` as `EMBEDDED_ORDER_DATA`. The system can also load from external `.cypher` files if needed.
+### Return Policy
+
+Edit `neo4j_module.py` and `data.cypher` to adjust the return window:
+
+```python
+# neo4j_module.py line 948
+return_policy_days = 300  # Change to desired days
+```
+
+```cypher
+// data.cypher line 234
+SET policy.returnWindowDays = 300
+```
+
+### Recursion Limit
+
+Adjust in `server.py` line 135:
+
+```python
+config = {
+    "configurable": {"thread_id": conversation_id},
+    "recursion_limit": 50  # Increase if needed
+}
+```
 
 ## 🎨 Features in Detail
 
+### Human-in-the-Loop (HITL) Refund Approval
+
+1. **Eligibility Check**: System validates:
+   - Order must be in "Delivered" status
+   - Within 300 days of purchase date
+   - Order exists in Neo4j
+
+2. **Modal UI**: Interactive approval overlay shows:
+   - Order ID, amount, and reason
+   - Approve/Reject buttons
+   - Backdrop click to keep modal open
+
+3. **Workflow Pause**: Graph execution stops at `UserTask2` until user provides input
+
+4. **Resume Logic**: User response ("approve"/"reject") triggers:
+   - `approve_return_request()` in Neo4j
+   - State update with `workflow_complete = True`
+   - Conditional routing to `__end__` (prevents infinite loops)
+
 ### Intent Classification
 
-The system recognizes the following intents:
-
-- `order_status`: Check order status
-- `order_price`: Get order price/cost
-- `track_order`: Track shipment
-- `refund`: Process refund request
-- `policy_question`: Answer policy questions
-- `fastener_search`: Search for fasteners
+Recognized intents:
+- `order_status`: Status + carrier info
+- `order_price`: Price breakdown with items
+- `track_order`: Tracking history with locations
+- `refund`: Eligibility check + HITL approval
+- `policy_question`: Document retrieval
 - `chit_chat`: General conversation
 
-### Workflow Nodes
+### Data Source
 
-- **LLM Task**: Intent classification and entity extraction
-- **Tool Task**: Execute external tools (order lookup, tracking, etc.)
-- **Agent Task**: Determine if document retrieval is needed
-- **Retrieve Task**: Fetch relevant documents from Neo4j
-- **Render Task**: Format and generate final response
-- **Human Review Task**: Handle refund approvals
+All order data comes from `data.cypher` via `neo4j_module.py`:
+- 6 sample orders with tracking events
+- 3 carriers (UPS, FedEx, USPS)
+- 4 customers
+- Return policy nodes
+- Product catalog with inventory
 
-## 🛠️ Technologies Used
+## 🛠️ Technologies
 
-- **LangGraph**: Workflow orchestration
-- **LangChain**: LLM integration
-- **FastAPI**: Web framework
-- **Neo4j**: Graph database
-- **OpenAI GPT-4o-mini**: Language model
-- **Python 3.9+**: Backend language
-- **HTML/CSS/JavaScript**: Frontend
+- **LangGraph**: Stateful workflow orchestration with cycles
+- **LangChain**: LLM integration (ChatOpenAI)
+- **FastAPI**: Async web framework
+- **Neo4j**: Graph database (Cypher queries)
+- **OpenAI GPT-4o-mini**: Intent classification and entity extraction
+- **Python 3.10+**: Backend
+- **Vanilla JS**: Frontend with modal handling
 
 ## 📝 Example Queries
 
 ### Order Management
-
 ```
-"Check order status for order 67890"
-"price of order 12345"
-"Track order 11111"
-"Process refund for order 22222"
+"check order 12345"
+"what's the status of order 67890"
+"price of order 11111"
+"track order 22222"
+"return order 11111"
+```
+
+### Carrier Queries
+```
+"who is shipping order 12345"
+"which carrier for order 67890"
 ```
 
 ### Policy Questions
-
 ```
-"What is your warranty policy?"
-"Tell me about shipping times"
-"How do I return an item?"
-```
-
-### Fastener Search
-
-```
-"Find M8 bolts"
-"Search for stainless steel screws"
-"What fasteners do you have in stock?"
+"what is your return policy"
+"how long do I have to return an item"
+"tell me about shipping"
 ```
 
 ## 🔍 Troubleshooting
 
+### Recursion Limit Errors
+
+**Symptom:** `Error: Recursion limit of 50 reached`
+
+**Solution:** The workflow now includes cycle-breaking logic in `UserTask2`. If the error persists:
+1. Check `state["workflow_complete"]` is set to `True` when review finishes
+2. Verify `user_task2_route()` conditional edge returns `"__end__"`
+3. Increase recursion limit in `server.py` config
+
+### Order Not Eligible for Return
+
+**Symptom:** "Order status is Returned/Shipped, order must be delivered"
+
+**Solution:** 
+1. Check order status in `data.cypher` (should be `"Delivered"`)
+2. Reseed database:
+   ```bash
+   python -c "import asyncio; from neo4j_module import seed_order_data_async; \
+   asyncio.run(seed_order_data_async(clear_existing=True, use_file=False))"
+   ```
+3. Verify order date is within 300 days
+
 ### Neo4j Connection Issues
 
-1. Verify Neo4j is running: `docker ps` or check Neo4j service
-2. Check connection string in `.env`: `NEO4J_URI=bolt://localhost:7687`
-3. Verify credentials: `NEO4J_USER` and `NEO4J_PASS`
-4. Test connection: Use the "Load Order Data" button in the UI
+1. Verify Neo4j is running: `docker ps` or check service
+2. Test connection: `NEO4J_URI=bolt://localhost:7687`
+3. Check credentials in `.env`
+4. Green "Neo4j" indicator in UI means connected
 
 ### Port Already in Use
 
-If port 4000 is in use, the server will automatically find the next available port. Check the console output for the actual port number.
+Server auto-selects next available port if 4000 is taken. Check console output.
 
-### Order Data Not Loading
+## 📊 Data Management
 
-1. Ensure Neo4j is connected (green status indicator)
-2. Click "Clear & Reload" to reset and reload data
-3. Check server logs for error messages
-4. Verify embedded data exists in `neo4j_module.py`
+### Reseed Database
 
-### Intent Classification Issues
+```bash
+python -c "import asyncio; from neo4j_module import seed_order_data_async; \
+asyncio.run(seed_order_data_async(clear_existing=True, use_file=False))"
+```
 
-- The system uses keyword-based classification with LLM fallback
-- Price queries are automatically detected and handled
-- Check server logs for intent classification details
+### View Embedded Data
+
+```python
+from neo4j_module import get_embedded_order_data
+data = get_embedded_order_data()
+print(f"Orders: {len(data['orders'])}")
+print(f"Carriers: {len(data['carriers'])}")
+```
+
+### Add New Orders
+
+Edit `data.cypher` and add Cypher statements:
+
+```cypher
+MERGE (order:Order {id: "99999"})
+SET order.status = "Delivered"
+SET order.orderDate = date("2025-06-15")
+SET order.expectedDelivery = date("2025-06-20")
+SET order.totalAmount = 299.99
+```
+
+Then reseed the database.
+
+## 🚀 Deployment
+
+### Production Checklist
+
+- [ ] Set strong Neo4j password
+- [ ] Use production OpenAI API key
+- [ ] Enable HTTPS for FastAPI
+- [ ] Configure CORS appropriately
+- [ ] Set up Neo4j backup strategy
+- [ ] Monitor recursion limit metrics
+- [ ] Add authentication for `/api/chat`
+
+### Environment Variables
+
+```env
+# Production
+OPENAI_API_KEY=sk-prod-...
+NEO4J_URI=bolt://production-host:7687
+NEO4J_USER=neo4j
+NEO4J_PASS=strong_password_here
+```
 
 ## 📄 License
 
@@ -344,13 +487,21 @@ If port 4000 is in use, the server will automatically find the next available po
 
 ## 🤝 Contributing
 
-[Add contribution guidelines here]
+Contributions welcome! Please:
+1. Fork the repository
+2. Create a feature branch
+3. Test with `python -m pytest` (if tests exist)
+4. Submit a pull request
 
 ## 📧 Support
 
-[Add support contact information here]
+For issues or questions:
+- Open a GitHub issue
+- Check troubleshooting section above
+- Review LangGraph docs: https://python.langchain.com/docs/langgraph
 
 ---
 
-**Built with using LangGraph, FastAPI, and Neo4j**
+**Built with ❤️ using LangGraph, FastAPI, and Neo4j**
 
+*Demonstrating human-in-the-loop workflows with cyclic graph topologies*

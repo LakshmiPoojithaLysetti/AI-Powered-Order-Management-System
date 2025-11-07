@@ -3,15 +3,29 @@ import os
 import json
 import asyncio
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Callable, Awaitable
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException  # type: ignore[import]
-from fastapi.responses import FileResponse  # type: ignore[import]
+from fastapi.responses import FileResponse, HTMLResponse  # type: ignore[import]
 from fastapi.middleware.cors import CORSMiddleware  # type: ignore[import]
 from pydantic import BaseModel
 from graph import build_graph, initial_state
-from neo4j_module import ensure_demo_docs, save_message, is_neo4j_available, seed_order_data_async, get_embedded_order_data
+from neo4j_module import (
+    seed_order_data_async,
+    is_neo4j_available,
+    ensure_demo_docs,
+    async_with_session,
+    retrieve_docs,
+    save_message,
+    check_return_eligibility,
+    get_order_price,
+    get_order_expected_delivery,
+    get_order_status,
+    get_embedded_order_data,
+)
 from langgraph.checkpoint.memory import MemorySaver  # type: ignore[import]
+
+ensure_demo_docs_fn: Callable[[], Awaitable[None]] = ensure_demo_docs
 
 load_dotenv(override=True)
 
@@ -37,10 +51,9 @@ from contextlib import asynccontextmanager
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
-    await ensure_demo_docs()
+    await ensure_demo_docs_fn()
     # Check if order data exists, if not, load it
     try:
-        from neo4j_module import async_with_session
         def _check_orders(session):
             result = session.run("MATCH (o:Order) RETURN count(o) AS count LIMIT 1")
             record = result.single()
@@ -92,6 +105,7 @@ class ChatResponse(BaseModel):
     isFastenerSearch: Optional[bool] = False
     parsed_query: Optional[str] = None
     currentActivity: Optional[str] = None
+    redirectUrl: Optional[str] = None
 
 
 # API routes - must be defined before static file routes
@@ -116,7 +130,10 @@ async def chat_endpoint(req: ChatRequest):
         if req.humanInput:
             state["human_input"] = req.humanInput
         
-        config = {"configurable": {"thread_id": conversation_id}}
+        config = {
+            "configurable": {"thread_id": conversation_id},
+            "recursion_limit": 50
+        }
         
         # Check if this is a continuation of a paused workflow
         if req.humanInput or req.message.lower().strip() in ["yes", "y", "approve", "confirm", "no", "n", "reject", "cancel"]:
@@ -339,6 +356,7 @@ async def chat_endpoint(req: ChatRequest):
         parsed_query = safe_get("parsed_query")
         is_fastener_search = safe_get("isFastenerSearch", False)
         current_activity = safe_get("current_activity")
+        redirect_url = safe_get("redirect_url")
         
         # Ensure retrieved is a list
         if not isinstance(retrieved, list):
@@ -362,7 +380,8 @@ async def chat_endpoint(req: ChatRequest):
                 "reviewMessage": review_message,
                 "isFastenerSearch": is_fastener_search,
                 "parsed_query": parsed_query,
-                "currentActivity": current_activity
+                "currentActivity": current_activity,
+                "redirectUrl": redirect_url
             }
             
             # Check each value for coroutines and ensure they're JSON-serializable
@@ -420,7 +439,8 @@ async def chat_endpoint(req: ChatRequest):
                 needsHumanReview=False,
                 reviewMessage=None,
                 isFastenerSearch=False,
-                parsed_query=None
+                parsed_query=None,
+                redirectUrl=None
             )
     except Exception as e:
         print(f"Error: {e}")
@@ -661,6 +681,164 @@ async def load_neo4j_data(req: LoadDataRequest):
         print(f"[ERROR] Failed to load Neo4j data: {error_detail}")
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=error_detail)
+
+
+@app.get("/return", response_class=HTMLResponse)
+async def return_page(orderId: str):
+    order_status = await get_order_status(orderId)
+    if not order_status:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    eligibility = await check_return_eligibility(orderId)
+    pricing = await get_order_price(orderId)
+    expected = await get_order_expected_delivery(orderId)
+
+    eligible = eligibility.get("eligible", False)
+    status = eligibility.get("status") or order_status.get("status")
+    reason = eligibility.get("reason", "")
+    total = pricing.get("totalAmount") if pricing else None
+    expected_delivery = expected.get("expectedDelivery") if expected else None
+
+    total_display = f"${float(total):,.2f}" if isinstance(total, (int, float)) else "N/A"
+    expected_display = expected_delivery or "N/A"
+    status_display = status or "Unknown"
+
+    eligibility_message = (
+        "✅ This order is eligible for return." if eligible else f"❌ {reason or 'This order is not eligible for return.'}"
+    )
+
+    html = f"""<!doctype html>
+<html lang=\"en\">
+<head>
+  <meta charset=\"utf-8\" />
+  <title>Return Order {orderId}</title>
+  <style>
+    body {{
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: linear-gradient(135deg, #0b1221 0%, #050810 100%);
+      color: #e9eef7;
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 40px;
+    }}
+    .card {{
+      background: rgba(17, 27, 47, 0.95);
+      border-radius: 18px;
+      padding: 32px;
+      max-width: 520px;
+      width: 100%;
+      box-shadow: 0 30px 60px rgba(5, 10, 27, 0.45);
+      border: 1px solid rgba(69, 115, 255, 0.25);
+    }}
+    h1 {{
+      margin-top: 0;
+      font-size: 26px;
+      margin-bottom: 12px;
+    }}
+    .status {{
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      font-size: 13px;
+      margin-bottom: 20px;
+      background: rgba(69, 115, 255, 0.15);
+      border: 1px solid rgba(69, 115, 255, 0.35);
+    }}
+    .details {{
+      display: grid;
+      gap: 14px;
+      margin-bottom: 24px;
+    }}
+    .detail-row {{
+      display: flex;
+      justify-content: space-between;
+      font-size: 15px;
+    }}
+    .detail-label {{
+      color: #8593bd;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      font-size: 12px;
+    }}
+    .cta {{
+      display: flex;
+      gap: 12px;
+      margin-top: 20px;
+    }}
+    .btn {{
+      flex: 1;
+      text-align: center;
+      padding: 12px 16px;
+      border-radius: 12px;
+      text-decoration: none;
+      font-weight: 600;
+      color: white;
+      border: none;
+      cursor: pointer;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }}
+    .btn-primary {{
+      background: linear-gradient(135deg, #4573ff 0%, #5a84ff 100%);
+      box-shadow: 0 12px 30px rgba(69, 115, 255, 0.35);
+    }}
+    .btn-secondary {{
+      background: rgba(133, 147, 189, 0.15);
+      border: 1px solid rgba(133, 147, 189, 0.3);
+      color: #d7def3;
+    }}
+    .btn:hover {{
+      transform: translateY(-2px);
+    }}
+    .eligibility {{
+      padding: 12px 16px;
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      font-size: 14px;
+    }}
+    .eligibility.eligible {{
+      border-color: rgba(34, 197, 94, 0.5);
+      color: #4ade80;
+    }}
+    .eligibility.ineligible {{
+      border-color: rgba(239, 68, 68, 0.4);
+      color: #f87171;
+    }}
+  </style>
+</head>
+<body>
+  <div class=\"card\">
+    <h1>Return Order {orderId}</h1>
+    <div class=\"status\">Status: {status_display}</div>
+
+    <div class=\"details\">
+      <div class=\"detail-row\">
+        <span class=\"detail-label\">Total Amount</span>
+        <span>{total_display}</span>
+      </div>
+      <div class=\"detail-row\">
+        <span class=\"detail-label\">Expected Delivery</span>
+        <span>{expected_display}</span>
+      </div>
+    </div>
+
+    <div class=\"eligibility {'eligible' if eligible else 'ineligible'}\">{eligibility_message}</div>
+
+    <div class=\"cta\">
+      <a class=\"btn btn-primary\" href=\"/\">Back to Assistant</a>
+      <a class=\"btn btn-secondary\" href=\"mailto:support@example.com?subject=Return%20Order%20{orderId}\">Contact Support</a>
+    </div>
+  </div>
+</body>
+</html>
+"""
+    return HTMLResponse(content=html)
 
 
 # Serve static files and frontend (must be after API routes)

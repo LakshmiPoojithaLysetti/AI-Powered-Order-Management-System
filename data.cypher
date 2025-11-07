@@ -3,21 +3,21 @@
 
 // Create Carriers
 
-MERGE (ups:Carrier {name: "UPS"})
-SET ups.code = "UPS"
-SET ups.website = "https://www.ups.com"
+MERGE (ups:Carrier {name: 'UPS'})
+SET ups.code = 'UPS'
+SET ups.website = 'https:\/\/www.ups.com'
 
-MERGE (fedex:Carrier {name: "FedEx"})
-SET fedex.code = "FDX"
-SET fedex.website = "https://www.fedex.com"
+MERGE (fedex:Carrier {name: 'FedEx'})
+SET fedex.code = 'FDX'
+SET fedex.website = 'https:\/\/www.fedex.com'
 
-MERGE (usps:Carrier {name: "USPS"})
-SET usps.code = "USPS"
-SET usps.website = "https://www.usps.com"
+MERGE (usps:Carrier {name: 'USPS'})
+SET usps.code = 'USPS'
+SET usps.website = 'https:\/\/www.usps.com'
 
-MERGE (dhl:Carrier {name: "DHL"})
-SET dhl.code = "DHL"
-SET dhl.website = "https://www.dhl.com"
+MERGE (dhl:Carrier {name: 'DHL'})
+SET dhl.code = 'DHL'
+SET dhl.website = 'https:\/\/www.dhl.com'
 
 // Create Customers
 
@@ -40,11 +40,11 @@ SET cust3.phone = "+1-555-0103"
 MERGE (order1:Order {id: "12345"})
 SET order1.status = "Shipped"
 SET order1.tracking = "1Z999AA10123456784"
-SET order1.orderDate = date("2024-01-15")
-SET order1.expectedDelivery = date("2024-01-20")
+SET order1.orderDate = date("2025-01-15")
+SET order1.expectedDelivery = date("2025-01-20")
 SET order1.totalAmount = 199.99
-SET order1.createdAt = datetime("2024-01-15T10:30:00Z")
-SET order1.updatedAt = datetime("2024-01-18T14:20:00Z")
+SET order1.createdAt = datetime("2025-01-15T10:30:00Z")
+SET order1.updatedAt = datetime("2025-01-18T14:20:00Z")
 
 MERGE (order1)-[:PLACED_BY]->(cust1)
 MERGE (order1)-[:SHIPPED_BY]->(ups)
@@ -58,15 +58,15 @@ SET item1_1.price = 99.99
 MERGE (order1)-[:HAS_ITEM]->(item1_1)
 
 // Order 12345 Tracking
-MERGE (track1_1:TrackingEvent {orderId: "12345", date: datetime("2024-01-15T10:30:00Z")})
+MERGE (track1_1:TrackingEvent {orderId: "12345", date: datetime("2025-01-15T10:30:00Z")})
 SET track1_1.location = "Warehouse"
 SET track1_1.status = "Order Placed"
 
-MERGE (track1_2:TrackingEvent {orderId: "12345", date: datetime("2024-01-16T08:15:00Z")})
+MERGE (track1_2:TrackingEvent {orderId: "12345", date: datetime("2025-01-16T08:15:00Z")})
 SET track1_2.location = "Distribution Center"
 SET track1_2.status = "Shipped"
 
-MERGE (track1_3:TrackingEvent {orderId: "12345", date: datetime("2024-01-17T12:30:00Z")})
+MERGE (track1_3:TrackingEvent {orderId: "12345", date: datetime("2025-01-17T12:30:00Z")})
 SET track1_3.location = "Chicago, IL"
 SET track1_3.status = "In Transit"
 
@@ -78,11 +78,11 @@ MERGE (order1)-[:HAS_TRACKING]->(track1_3)
 MERGE (order2:Order {id: "67890"})
 SET order2.status = "In Transit"
 SET order2.tracking = "1Z888AA10234567890"
-SET order2.orderDate = date("2024-01-20")
-SET order2.expectedDelivery = date("2024-01-25")
+SET order2.orderDate = date("2025-01-20")
+SET order2.expectedDelivery = date("2025-01-25")
 SET order2.totalAmount = 349.99
-SET order2.createdAt = datetime("2024-01-20T09:15:00Z")
-SET order2.updatedAt = datetime("2024-01-21T16:45:00Z")
+SET order2.createdAt = datetime("2025-01-20T09:15:00Z")
+SET order2.updatedAt = datetime("2025-01-21T16:45:00Z")
 
 MERGE (order2)-[:PLACED_BY]->(cust2)
 MERGE (order2)-[:SHIPPED_BY]->(fedex)
@@ -100,15 +100,15 @@ SET item2_2.price = 99.99
 MERGE (order2)-[:HAS_ITEM]->(item2_1)
 MERGE (order2)-[:HAS_ITEM]->(item2_2)
 
-MERGE (track2_1:TrackingEvent {orderId: "67890", date: datetime("2024-01-20T09:15:00Z")})
+MERGE (track2_1:TrackingEvent {orderId: "67890", date: datetime("2025-01-20T09:15:00Z")})
 SET track2_1.location = "Warehouse"
 SET track2_1.status = "Order Placed"
 
-MERGE (track2_2:TrackingEvent {orderId: "67890", date: datetime("2024-01-21T10:00:00Z")})
+MERGE (track2_2:TrackingEvent {orderId: "67890", date: datetime("2025-01-21T10:00:00Z")})
 SET track2_2.location = "Distribution Center"
 SET track2_2.status = "Shipped"
 
-MERGE (track2_3:TrackingEvent {orderId: "67890", date: datetime("2024-01-21T16:45:00Z")})
+MERGE (track2_3:TrackingEvent {orderId: "67890", date: datetime("2025-01-21T16:45:00Z")})
 SET track2_3.location = "New York, NY"
 SET track2_3.status = "In Transit"
 
@@ -120,11 +120,11 @@ MERGE (order2)-[:HAS_TRACKING]->(track2_3)
 MERGE (order3:Order {id: "11111"})
 SET order3.status = "Delivered"
 SET order3.tracking = "9400111899223197428490"
-SET order3.orderDate = date("2024-01-10")
-SET order3.expectedDelivery = date("2024-01-15")
+SET order3.orderDate = date("2025-06-01")
+SET order3.expectedDelivery = date("2025-06-05")
 SET order3.totalAmount = 89.99
-SET order3.createdAt = datetime("2024-01-10T11:20:00Z")
-SET order3.updatedAt = datetime("2024-01-15T14:30:00Z")
+SET order3.createdAt = datetime("2025-06-01T11:20:00Z")
+SET order3.updatedAt = datetime("2025-06-05T14:30:00Z")
 
 MERGE (order3)-[:PLACED_BY]->(cust3)
 MERGE (order3)-[:SHIPPED_BY]->(usps)
@@ -136,19 +136,19 @@ SET item3_1.price = 89.99
 
 MERGE (order3)-[:HAS_ITEM]->(item3_1)
 
-MERGE (track3_1:TrackingEvent {orderId: "11111", date: datetime("2024-01-10T11:20:00Z")})
+MERGE (track3_1:TrackingEvent {orderId: "11111", date: datetime("2025-06-01T11:20:00Z")})
 SET track3_1.location = "Warehouse"
 SET track3_1.status = "Order Placed"
 
-MERGE (track3_2:TrackingEvent {orderId: "11111", date: datetime("2024-01-12T09:00:00Z")})
+MERGE (track3_2:TrackingEvent {orderId: "11111", date: datetime("2025-06-02T09:00:00Z")})
 SET track3_2.location = "Distribution Center"
 SET track3_2.status = "Shipped"
 
-MERGE (track3_3:TrackingEvent {orderId: "11111", date: datetime("2024-01-14T13:15:00Z")})
+MERGE (track3_3:TrackingEvent {orderId: "11111", date: datetime("2025-06-04T13:15:00Z")})
 SET track3_3.location = "Los Angeles, CA"
 SET track3_3.status = "Out for Delivery"
 
-MERGE (track3_4:TrackingEvent {orderId: "11111", date: datetime("2024-01-15T14:30:00Z")})
+MERGE (track3_4:TrackingEvent {orderId: "11111", date: datetime("2025-06-05T14:30:00Z")})
 SET track3_4.location = "Los Angeles, CA"
 SET track3_4.status = "Delivered"
 
@@ -160,10 +160,10 @@ MERGE (order3)-[:HAS_TRACKING]->(track3_4)
 // Order 22222
 MERGE (order4:Order {id: "22222"})
 SET order4.status = "Processing"
-SET order4.orderDate = date("2024-01-25")
+SET order4.orderDate = date("2025-02-01")
 SET order4.totalAmount = 159.99
-SET order4.createdAt = datetime("2024-01-25T08:00:00Z")
-SET order4.updatedAt = datetime("2024-01-25T08:00:00Z")
+SET order4.createdAt = datetime("2025-02-01T08:00:00Z")
+SET order4.updatedAt = datetime("2025-02-01T08:00:00Z")
 
 MERGE (order4)-[:PLACED_BY]->(cust1)
 
@@ -183,9 +183,9 @@ SET refund1.amount = 159.99
 SET refund1.currency = "USD"
 SET refund1.reason = "Customer request"
 SET refund1.estimatedProcessingTime = "5-7 business days"
-SET refund1.requestedAt = datetime("2024-01-25T10:00:00Z")
+SET refund1.requestedAt = datetime("2025-02-01T10:00:00Z")
 SET refund1.message = "Your refund request has been received and is being processed."
-SET refund1.createdAt = datetime("2024-01-25T10:00:00Z")
+SET refund1.createdAt = datetime("2025-02-01T10:00:00Z")
 
 MERGE (order4)-[:HAS_REFUND]->(refund1)
 
@@ -194,10 +194,10 @@ MERGE (order4)-[:HAS_REFUND]->(refund1)
 // Order 33333
 MERGE (order5:Order {id: "33333"})
 SET order5.status = "Pending"
-SET order5.orderDate = date("2024-01-28")
+SET order5.orderDate = date("2025-02-18")
 SET order5.totalAmount = 299.99
-SET order5.createdAt = datetime("2024-01-28T12:00:00Z")
-SET order5.updatedAt = datetime("2024-01-28T12:00:00Z")
+SET order5.createdAt = datetime("2025-02-18T12:00:00Z")
+SET order5.updatedAt = datetime("2025-02-18T12:00:00Z")
 
 MERGE (order5)-[:PLACED_BY]->(cust2)
 
@@ -211,10 +211,10 @@ MERGE (order5)-[:HAS_ITEM]->(item5_1)
 // Order 44444
 MERGE (order6:Order {id: "44444"})
 SET order6.status = "Cancelled"
-SET order6.orderDate = date("2024-01-22")
+SET order6.orderDate = date("2025-02-12")
 SET order6.totalAmount = 79.99
-SET order6.createdAt = datetime("2024-01-22T15:30:00Z")
-SET order6.updatedAt = datetime("2024-01-23T09:00:00Z")
+SET order6.createdAt = datetime("2025-02-12T15:30:00Z")
+SET order6.updatedAt = datetime("2025-02-13T09:00:00Z")
 
 MERGE (order6)-[:PLACED_BY]->(cust3)
 
@@ -230,8 +230,8 @@ MERGE (order6)-[:HAS_ITEM]->(item6_1)
 
 // Return Policy for RenderTask / UserTask2 messaging
 MERGE (policy:ReturnPolicy {id: "return-policy-default"})
-SET policy.description = "Items can be returned within 30 days of delivery if unused and in original packaging."
-SET policy.returnWindowDays = 30
+SET policy.description = "Items can be returned within 300 days of delivery if unused and in original packaging."
+SET policy.returnWindowDays = 300
 SET policy.restockingFee = 0.0
 SET policy.contactEmail = "returns@example.com"
 
