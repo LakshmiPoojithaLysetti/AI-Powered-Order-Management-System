@@ -1,36 +1,415 @@
 {
   "id": 1762408066447,
-  "title": "Test Agent",
-  "description": "Agent to test all task types in the workflow.",
+  "title": "AI-Powered Order Management System",
+  "description": "Conversational agent for order management with human-in-the-loop refund approval. Supports order status queries, price lookups, tracking, and return processing with 300-day return policy.",
   "color": "#06b6d4",
   "sampleQuestions": [
-    "Question 1"
+    "check order 12345",
+    "what's the price of order 11111",
+    "track my order 67890",
+    "return order 11111",
+    "what's your return policy"
   ],
+  "dataSource": {
+    "type": "Neo4j",
+    "seedFile": "data.cypher",
+    "description": "Order data is seeded from data.cypher into Neo4j database",
+    "entities": {
+      "carriers": [
+        {
+          "id": "ups",
+          "name": "UPS",
+          "website": "https://www.ups.com",
+          "usedByOrders": ["12345"]
+        },
+        {
+          "id": "fedex",
+          "name": "FedEx",
+          "website": "https://www.fedex.com",
+          "usedByOrders": ["67890"]
+        },
+        {
+          "id": "usps",
+          "name": "USPS",
+          "website": "https://www.usps.com",
+          "usedByOrders": ["11111"]
+        }
+      ],
+      "customers": [
+        {
+          "id": "cust1",
+          "name": "John Smith",
+          "email": "john.smith@example.com",
+          "phone": "+1-555-0101",
+          "orders": ["12345"]
+        },
+        {
+          "id": "cust2",
+          "name": "Jane Doe",
+          "email": "jane.doe@example.com",
+          "phone": "+1-555-0102",
+          "orders": ["67890"]
+        },
+        {
+          "id": "cust3",
+          "name": "Alice Johnson",
+          "email": "alice.johnson@example.com",
+          "phone": "+1-555-0103",
+          "orders": ["11111"]
+        },
+        {
+          "id": "cust4",
+          "name": "Bob Williams",
+          "email": "bob.williams@example.com",
+          "phone": "+1-555-0104",
+          "orders": ["22222"]
+        },
+        {
+          "id": "cust5",
+          "name": "Charlie Brown",
+          "email": "charlie.brown@example.com",
+          "phone": "+1-555-0105",
+          "orders": ["33333"]
+        },
+        {
+          "id": "cust6",
+          "name": "Diana Prince",
+          "email": "diana.prince@example.com",
+          "phone": "+1-555-0106",
+          "orders": ["44444"]
+        }
+      ],
+      "orders": [
+        {
+          "id": "12345",
+          "status": "Shipped",
+          "carrier": "UPS",
+          "tracking": "1Z999AA10123456784",
+          "orderDate": "2025-01-15",
+          "expectedDelivery": "2025-01-20",
+          "totalAmount": 199.99,
+          "customer": "cust1",
+          "items": [
+            {"name": "Product A", "quantity": 2, "price": 99.99}
+          ],
+          "trackingEvents": [
+            {"date": "2025-01-15T10:30:00Z", "location": "Warehouse", "status": "Order Placed"},
+            {"date": "2025-01-16T08:15:00Z", "location": "Distribution Center", "status": "Shipped"},
+            {"date": "2025-01-17T12:30:00Z", "location": "Chicago, IL", "status": "In Transit"}
+          ],
+          "returnEligible": false,
+          "returnReason": "Order must be delivered before it can be returned"
+        },
+        {
+          "id": "67890",
+          "status": "In Transit",
+          "carrier": "FedEx",
+          "tracking": "1Z888AA10234567890",
+          "orderDate": "2025-01-20",
+          "expectedDelivery": "2025-01-25",
+          "totalAmount": 349.99,
+          "customer": "cust2",
+          "items": [
+            {"name": "Product B", "quantity": 1, "price": 249.99},
+            {"name": "Product C", "quantity": 1, "price": 99.99}
+          ],
+          "trackingEvents": [
+            {"date": "2025-01-20T09:15:00Z", "location": "Warehouse", "status": "Order Placed"},
+            {"date": "2025-01-21T10:20:00Z", "location": "Sorting Facility", "status": "In Transit"}
+          ],
+          "returnEligible": false,
+          "returnReason": "Order must be delivered before it can be returned"
+        },
+        {
+          "id": "11111",
+          "status": "Delivered",
+          "carrier": "USPS",
+          "tracking": "9400111899223197428490",
+          "orderDate": "2025-06-01",
+          "expectedDelivery": "2025-06-05",
+          "totalAmount": 89.99,
+          "customer": "cust3",
+          "items": [
+            {"name": "Product D", "quantity": 1, "price": 89.99}
+          ],
+          "trackingEvents": [
+            {"date": "2025-06-01T11:20:00Z", "location": "Warehouse", "status": "Order Placed"},
+            {"date": "2025-06-02T09:00:00Z", "location": "Distribution Center", "status": "Shipped"},
+            {"date": "2025-06-04T13:15:00Z", "location": "Local Post Office", "status": "Out for Delivery"},
+            {"date": "2025-06-05T14:30:00Z", "location": "Customer Address", "status": "Delivered"}
+          ],
+          "returnEligible": true,
+          "daysSincePurchase": "~150 days (within 300-day window)",
+          "returnReason": null
+        },
+        {
+          "id": "22222",
+          "status": "Delivered",
+          "carrier": "UPS",
+          "tracking": "1Z999AA10987654321",
+          "orderDate": "2025-02-01",
+          "expectedDelivery": "2025-02-05",
+          "totalAmount": 299.99,
+          "customer": "cust4",
+          "items": [
+            {"name": "Product E", "quantity": 1, "price": 299.99}
+          ],
+          "trackingEvents": [
+            {"date": "2025-02-01T08:00:00Z", "location": "Warehouse", "status": "Order Placed"},
+            {"date": "2025-02-02T14:30:00Z", "location": "Distribution Center", "status": "Shipped"},
+            {"date": "2025-02-05T10:15:00Z", "location": "Customer Address", "status": "Delivered"}
+          ],
+          "returnEligible": true,
+          "daysSincePurchase": "~280 days (within 300-day window)",
+          "hasRefund": true,
+          "refundId": "REFUND-22222-20250210",
+          "refundStatus": "completed",
+          "refundAmount": 299.99
+        },
+        {
+          "id": "33333",
+          "status": "Delivered",
+          "carrier": "FedEx",
+          "tracking": "1Z888AA10876543210",
+          "orderDate": "2025-02-15",
+          "expectedDelivery": "2025-02-20",
+          "totalAmount": 149.99,
+          "customer": "cust5",
+          "items": [
+            {"name": "Product F", "quantity": 3, "price": 49.99}
+          ],
+          "trackingEvents": [
+            {"date": "2025-02-15T12:00:00Z", "location": "Warehouse", "status": "Order Placed"},
+            {"date": "2025-02-16T09:30:00Z", "location": "Sorting Facility", "status": "In Transit"},
+            {"date": "2025-02-20T15:45:00Z", "location": "Customer Address", "status": "Delivered"}
+          ],
+          "returnEligible": true,
+          "daysSincePurchase": "~265 days (within 300-day window)",
+          "hasReturnRequest": true,
+          "returnRequestId": "RET-33333-20250225",
+          "returnRequestStatus": "rejected"
+        },
+        {
+          "id": "44444",
+          "status": "Cancelled",
+          "carrier": null,
+          "tracking": null,
+          "orderDate": "2025-01-25",
+          "expectedDelivery": null,
+          "totalAmount": 79.99,
+          "customer": "cust6",
+          "items": [
+            {"name": "Product G", "quantity": 1, "price": 79.99}
+          ],
+          "trackingEvents": [],
+          "returnEligible": false,
+          "returnReason": "Order was cancelled and never shipped"
+        }
+      ],
+      "returnPolicy": {
+        "id": "return-policy-default",
+        "description": "Items can be returned within 300 days of delivery if unused and in original packaging.",
+        "returnWindowDays": 300,
+        "restockingFee": 0.0,
+        "contactEmail": "returns@example.com",
+        "requirements": [
+          "Order must be in 'Delivered' status",
+          "Return must be requested within 300 days of purchase date",
+          "Items must be unused and in original packaging"
+        ]
+      },
+      "products": [
+        {
+          "sku": "SKU-1001",
+          "name": "High Torque Screwdriver Set",
+          "category": "Fasteners",
+          "price": 49.99,
+          "currency": "USD",
+          "inventory": [
+            {"location": "WH-1", "quantity": 150, "reserved": 35}
+          ]
+        },
+        {
+          "sku": "SKU-1002",
+          "name": "Industrial Bolt Pack",
+          "category": "Fasteners",
+          "price": 29.99,
+          "currency": "USD",
+          "inventory": [
+            {"location": "WH-2", "quantity": 80, "reserved": 10}
+          ]
+        },
+        {
+          "sku": "SKU-1003",
+          "name": "Heavy Duty Anchors",
+          "category": "Hardware",
+          "price": 19.99,
+          "currency": "USD",
+          "inventory": [
+            {"location": "WH-3", "quantity": 200, "reserved": 5}
+          ]
+        }
+      ],
+      "coupons": [
+        {
+          "code": "SAVE10",
+          "discountPercent": 10.0,
+          "minimumPurchase": 50.0,
+          "expiryDate": "2025-12-31",
+          "active": true
+        },
+        {
+          "code": "WELCOME20",
+          "discountPercent": 20.0,
+          "minimumPurchase": 100.0,
+          "expiryDate": "2025-06-30",
+          "active": true
+        }
+      ],
+      "shippingMethods": [
+        {
+          "id": "standard",
+          "name": "Standard Shipping",
+          "cost": 5.99,
+          "estimatedDays": "5-7"
+        },
+        {
+          "id": "express",
+          "name": "Express Shipping",
+          "cost": 15.99,
+          "estimatedDays": "2-3"
+        },
+        {
+          "id": "overnight",
+          "name": "Overnight Shipping",
+          "cost": 29.99,
+          "estimatedDays": "1"
+        }
+      ],
+      "taxRates": [
+        {
+          "state": "CA",
+          "rate": 0.0725
+        },
+        {
+          "state": "NY",
+          "rate": 0.08875
+        },
+        {
+          "state": "TX",
+          "rate": 0.0625
+        }
+      ]
+    }
+  },
   "stateSchema": [
     {
-      "parameterName": "param 1",
-      "parameterType": "String",
-      "defaultValue": "abcd"
+      "parameterName": "messages",
+      "parameterType": "List[Any]",
+      "defaultValue": "[]",
+      "description": "Chat message history"
     },
     {
-      "parameterName": "param 2",
+      "parameterName": "input",
+      "parameterType": "String",
+      "defaultValue": "",
+      "description": "User input text"
+    },
+    {
+      "parameterName": "channel",
+      "parameterType": "String",
+      "defaultValue": "chat",
+      "description": "Communication channel (chat/email)"
+    },
+    {
+      "parameterName": "intent",
+      "parameterType": "String",
+      "defaultValue": null,
+      "description": "Classified intent (order_status, order_price, track_order, refund, policy_question, chit_chat)"
+    },
+    {
+      "parameterName": "entities",
+      "parameterType": "Dict[String, Any]",
+      "defaultValue": "{}",
+      "description": "Extracted entities (orderId, etc.)"
+    },
+    {
+      "parameterName": "tool_result",
+      "parameterType": "Dict[String, Any]",
+      "defaultValue": null,
+      "description": "Result from tool execution"
+    },
+    {
+      "parameterName": "retrieved",
+      "parameterType": "List[Dict]",
+      "defaultValue": "[]",
+      "description": "Retrieved documents from Neo4j"
+    },
+    {
+      "parameterName": "needs_human_review",
+      "parameterType": "Boolean",
+      "defaultValue": false,
+      "description": "Flag for human-in-the-loop approval"
+    },
+    {
+      "parameterName": "human_input",
+      "parameterType": "String",
+      "defaultValue": null,
+      "description": "User's approval/rejection input"
+    },
+    {
+      "parameterName": "response",
+      "parameterType": "String",
+      "defaultValue": null,
+      "description": "Final response to user"
+    },
+    {
+      "parameterName": "current_activity",
+      "parameterType": "String",
+      "defaultValue": null,
+      "description": "Next activity to route to"
+    },
+    {
+      "parameterName": "workflow_data",
+      "parameterType": "Dict[String, Any]",
+      "defaultValue": null,
+      "description": "Additional workflow metadata"
+    },
+    {
+      "parameterName": "review_message",
+      "parameterType": "String",
+      "defaultValue": null,
+      "description": "Message for approval prompt"
+    },
+    {
+      "parameterName": "redirect_url",
+      "parameterType": "String",
+      "defaultValue": null,
+      "description": "URL for return page redirect"
+    },
+    {
+      "parameterName": "workflow_complete",
+      "parameterType": "Boolean",
+      "defaultValue": false,
+      "description": "Flag to mark workflow completion"
+    },
+    {
+      "parameterName": "follow_up_needed",
+      "parameterType": "Boolean",
+      "defaultValue": false,
+      "description": "Flag for follow-up questions (cyclic flow)"
+    },
+    {
+      "parameterName": "follow_up_question",
+      "parameterType": "String",
+      "defaultValue": null,
+      "description": "Context for follow-up question"
+    },
+    {
+      "parameterName": "turn_count",
       "parameterType": "Integer",
-      "defaultValue": "11"
-    },
-    {
-      "parameterName": "param3",
-      "parameterType": "Float",
-      "defaultValue": "1.5"
-    },
-    {
-      "parameterName": "param4",
-      "parameterType": "String",
-      "defaultValue": "asdfsdafsd"
-    },
-    {
-      "parameterName": "param5",
-      "parameterType": "String",
-      "defaultValue": "asdfds"
+      "defaultValue": 0,
+      "description": "Number of conversation turns"
     }
   ],
   "agentType": "Conversational",
@@ -87,7 +466,7 @@
         },
         {
           "Name": "Type",
-          "Value": ""
+          "Value": "TextInput"
         },
         {
           "Name": "Options",
@@ -95,7 +474,25 @@
         },
         {
           "Name": "MapInputTo",
-          "Value": ""
+          "Value": "state['input']"
+        },
+        {
+          "Name": "MapOutputTo",
+          "Value": "state['entities']"
+        },
+        {
+          "Name": "InputMapping",
+          "Value": {
+            "input": "state['input']",
+            "messages": "state['messages']"
+          }
+        },
+        {
+          "Name": "OutputMapping",
+          "Value": {
+            "entities": "state['entities']",
+            "orderId": "state['entities']['orderId']"
+          }
         },
         {
           "Name": "activityType",
@@ -132,11 +529,32 @@
         },
         {
           "Name": "ParameterizedQuery",
-          "Value": ""
+          "Value": "MATCH (d:Doc) WHERE toLower(d.title) CONTAINS toLower($query) OR toLower(d.body) CONTAINS toLower($query) RETURN d.id, d.title, d.body LIMIT 3"
         },
         {
           "Name": "MapResultsTo",
-          "Value": ""
+          "Value": "state['retrieved']"
+        },
+        {
+          "Name": "InputMapping",
+          "Value": {
+            "query": "state['input']",
+            "intent": "state['intent']"
+          }
+        },
+        {
+          "Name": "OutputMapping",
+          "Value": {
+            "retrieved": "state['retrieved']",
+            "documents": "state['retrieved']"
+          }
+        },
+        {
+          "Name": "QueryParameters",
+          "Value": {
+            "query": "keywords from state['input']",
+            "limit": 3
+          }
         },
         {
           "Name": "activityType",
@@ -173,15 +591,36 @@
         },
         {
           "Name": "Instructions",
-          "Value": ""
+          "Value": "Classify the user's intent and extract entities. Respond in format: INTENT: <intent_name> ENTITIES: {json}. Possible intents: order_status, order_price, track_order, refund, policy_question, fastener_search, chit_chat."
         },
         {
           "Name": "Model",
-          "Value": ""
+          "Value": "gpt-4o-mini"
         },
         {
           "Name": "MapResponseTo",
-          "Value": ""
+          "Value": "state['intent'], state['entities']"
+        },
+        {
+          "Name": "InputMapping",
+          "Value": {
+            "input": "state['input']",
+            "entities": "state['entities']",
+            "retrieved": "state['retrieved']",
+            "follow_up_question": "state['follow_up_question']"
+          }
+        },
+        {
+          "Name": "OutputMapping",
+          "Value": {
+            "intent": "state['intent']",
+            "entities": "state['entities']",
+            "refined_intent": "state['intent']"
+          }
+        },
+        {
+          "Name": "PromptTemplate",
+          "Value": "You are a helpful order management assistant. User input: {input}. Retrieved context: {retrieved}. Classify intent and extract entities (especially orderId)."
         },
         {
           "Name": "activityType",
@@ -240,8 +679,16 @@
           "Name": "inputMappings",
           "Value": [
             {
-              "InputParameter": "",
-              "StateParameter": ""
+              "InputParameter": "order_id",
+              "StateParameter": "state['entities']['orderId']"
+            },
+            {
+              "InputParameter": "intent",
+              "StateParameter": "state['intent']"
+            },
+            {
+              "InputParameter": "input_text",
+              "StateParameter": "state['input']"
             }
           ]
         },
@@ -249,10 +696,32 @@
           "Name": "outputMappings",
           "Value": [
             {
-              "StateParameter": "",
-              "OutputParameter": ""
+              "StateParameter": "state['tool_result']",
+              "OutputParameter": "tool_execution_result"
+            },
+            {
+              "StateParameter": "state['needs_human_review']",
+              "OutputParameter": "tool_result['needsHumanReview']"
+            },
+            {
+              "StateParameter": "state['redirect_url']",
+              "OutputParameter": "redirect_url_if_eligible"
+            },
+            {
+              "StateParameter": "state['review_message']",
+              "OutputParameter": "tool_result['message']"
             }
           ]
+        },
+        {
+          "Name": "ToolFunctions",
+          "Value": {
+            "order_status": "lookup_order_status(order_id)",
+            "order_price": "get_order_price(order_id)",
+            "track_order": "track_order(order_id)",
+            "refund": "process_refund(order_id, reason)",
+            "policy_question": "retrieve_policy_docs(query)"
+          }
         }
       ]
     },
@@ -273,7 +742,7 @@
         },
         {
           "Name": "Description",
-          "Value": "Decide CREATE | UPDATE | CANCEL | QUOTE"
+          "Value": "Route to RenderTask1 (normal response), AgentTask1 (complex operations), or UserTask2 (human approval needed)"
         },
         {
           "Name": "BotUtterance",
@@ -295,32 +764,36 @@
           "Name": "routingConditions",
           "Value": [
             {
-              "Variable": "intent",
-              "Type": "String",
+              "Variable": "needs_human_review",
+              "Type": "Boolean",
               "Operator": "equals",
-              "Value": "CREATE",
-              "Node": "AgentTask1"
+              "Value": true,
+              "Node": "UserTask2",
+              "Description": "Route to HITL approval when refund requires human review"
             },
             {
               "Variable": "intent",
               "Type": "String",
               "Operator": "equals",
-              "Value": "UPDATE",
-              "Node": "AgentTask1"
+              "Value": "fastener_search",
+              "Node": "AgentTask1",
+              "Description": "Route to agent for complex fastener search operations"
             },
             {
               "Variable": "intent",
               "Type": "String",
-              "Operator": "equals",
-              "Value": "CANCEL",
-              "Node": "UserTask2"
+              "Operator": "in",
+              "Value": ["order_status", "order_price", "track_order", "policy_question", "chit_chat"],
+              "Node": "RenderTask1",
+              "Description": "Route to render for standard responses"
             },
             {
-              "Variable": "intent",
-              "Type": "String",
-              "Operator": "equals",
-              "Value": "QUOTE",
-              "Node": "RenderTask1"
+              "Variable": "default",
+              "Type": "fallback",
+              "Operator": "default",
+              "Value": null,
+              "Node": "RenderTask1",
+              "Description": "Default route to RenderTask1"
             }
           ]
         }
@@ -377,10 +850,47 @@
           "Name": "widgetInputMappings",
           "Value": [
             {
-              "StateVariable": "",
-              "InputParameter": ""
+              "StateVariable": "state['response']",
+              "InputParameter": "formatted_response"
+            },
+            {
+              "StateVariable": "state['intent']",
+              "InputParameter": "response_intent"
+            },
+            {
+              "StateVariable": "state['tool_result']",
+              "InputParameter": "tool_data"
+            },
+            {
+              "StateVariable": "state['redirect_url']",
+              "InputParameter": "redirect_url"
             }
           ]
+        },
+        {
+          "Name": "InputMapping",
+          "Value": {
+            "intent": "state['intent']",
+            "tool_result": "state['tool_result']",
+            "needs_review": "state['needs_human_review']"
+          }
+        },
+        {
+          "Name": "OutputMapping",
+          "Value": {
+            "response": "state['response']",
+            "formatted_message": "state['response']"
+          }
+        },
+        {
+          "Name": "ResponseFormats",
+          "Value": {
+            "order_status": "Order {orderId} is currently **{status}**. Carrier: **{carrier}**. Items: {itemCount}. Total: ${totalAmount}",
+            "order_price": "Total price for order {orderId} is **${totalAmount}**. Item Breakdown: {items}",
+            "track_order": "**Tracking Info for Order {orderId}** Status: {status} Carrier: {carrier} Current Location: {currentLocation} ETA: {estimatedDelivery}",
+            "refund": "Refund eligibility: {eligibleMessage}",
+            "policy_question": "{policyContent}"
+          }
         }
       ]
     },
@@ -409,19 +919,34 @@
         },
         {
           "Name": "PromptTemplate",
-          "Value": ""
+          "Value": "You are helping a customer search for fasteners and hardware parts. User query: {input}. Provide helpful information about fasteners, screws, bolts, and hardware parts."
         },
         {
           "Name": "Type",
-          "Value": ""
+          "Value": "ReAct"
         },
         {
           "Name": "Agent",
-          "Value": ""
+          "Value": "FastenerSearchAgent"
         },
         {
           "Name": "AgentRegistry",
-          "Value": ""
+          "Value": "OrderManagementAgents"
+        },
+        {
+          "Name": "InputMapping",
+          "Value": {
+            "input": "state['input']",
+            "retrieved": "state['retrieved']",
+            "intent": "state['intent']"
+          }
+        },
+        {
+          "Name": "OutputMapping",
+          "Value": {
+            "response": "state['response']",
+            "agent_result": "state['tool_result']"
+          }
         },
         {
           "Name": "activityType",
@@ -450,7 +975,7 @@
         },
         {
           "Name": "Description",
-          "Value": "When required fields missing → return next_action: \"ASK_USER\" with questions"
+          "Value": "Human-in-the-loop approval for refund requests. Pauses workflow for user approval/rejection. Supports cyclic flow for follow-up questions."
         },
         {
           "Name": "BotUtterance",
@@ -458,15 +983,48 @@
         },
         {
           "Name": "Type",
-          "Value": ""
+          "Value": "ApprovalTask"
         },
         {
           "Name": "Options",
-          "Value": []
+          "Value": ["approve", "reject", "yes", "no"]
         },
         {
           "Name": "MapInputTo",
-          "Value": ""
+          "Value": "state['human_input']"
+        },
+        {
+          "Name": "InputMapping",
+          "Value": {
+            "human_input": "state['human_input']",
+            "tool_result": "state['tool_result']",
+            "review_message": "state['review_message']",
+            "turn_count": "state['turn_count']"
+          }
+        },
+        {
+          "Name": "OutputMapping",
+          "Value": {
+            "response": "state['response']",
+            "workflow_complete": "state['workflow_complete']",
+            "follow_up_needed": "state['follow_up_needed']",
+            "needs_human_review": "state['needs_human_review']"
+          }
+        },
+        {
+          "Name": "ApprovalActions",
+          "Value": {
+            "approve": "approve_return_request(return_request_id, approved=True)",
+            "reject": "approve_return_request(return_request_id, approved=False)"
+          }
+        },
+        {
+          "Name": "CycleRouting",
+          "Value": {
+            "follow_up_needed_true": "LLMTask1",
+            "workflow_complete_true": "__end__",
+            "needs_review_true": "__end__"
+          }
         },
         {
           "Name": "ShowAsReverseTask",

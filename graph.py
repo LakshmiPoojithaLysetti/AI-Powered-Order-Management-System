@@ -277,7 +277,7 @@ def tool_task_node(state: GraphState) -> GraphState:
         
 
 def router_task_node(state: GraphState) -> GraphState:
-    """Router task node - routes to next activity based on conditions."""
+    """Router task node - routes to next activity based on conditions."""  #conditional branching logic
     intent = state.get("intent", "")
     needs_review = state.get("needs_human_review", False)
     tool_result = state.get("tool_result")
@@ -367,7 +367,7 @@ def render_task_node(state: GraphState) -> GraphState:
         response = "Our return policy allows returns within 30 days of purchase. Shipping is free for orders over $50."
     
     elif intent == "chit_chat":
-        response = "How can I assist you?"
+        response = "Please provide the order details so I can assist you more effectively!"
     
     else:
         response = build_default_response(intent or "", state, tool_result)

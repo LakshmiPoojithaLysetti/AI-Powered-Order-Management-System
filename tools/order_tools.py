@@ -332,7 +332,7 @@ async def track_order(order_id: Optional[str]) -> Optional[Dict[str, Any]]:
             if hasattr(value, "isoformat"):
                 return value.isoformat()
             return value
-
+        
         def _work(session):
             try:
                 result = session.run(
@@ -349,8 +349,8 @@ async def track_order(order_id: Optional[str]) -> Optional[Dict[str, Any]]:
                     date_val = _convert_value(record.get("date"))
                     history.append(
                         {
-                            "date": date_val,
-                            "location": record.get("location"),
+                        "date": date_val,
+                        "location": record.get("location"),
                             "status": record.get("status"),
                         }
                     )
@@ -358,29 +358,29 @@ async def track_order(order_id: Optional[str]) -> Optional[Dict[str, Any]]:
             except Exception as e:
                 print(f"[neo4j] Error retrieving tracking history: {e}")
                 return []
-
+        
         return await async_with_session(_work)
 
     history = await _get_tracking_history()
-
-    # Get current location from most recent tracking event
-    current_location = "Unknown"
+        
+        # Get current location from most recent tracking event
+        current_location = "Unknown"
     if history:
-        current_location = history[0].get("location", "Unknown")
-
+            current_location = history[0].get("location", "Unknown")
+        
     # Create tracking response from order data (from data.cypher)
-    tracking = {
-        "orderId": order.get("id"),
-        "status": order.get("status", "Unknown"),
-        "carrier": order.get("carrier"),
-        "trackingNumber": order.get("tracking"),
-        "currentLocation": current_location,
+        tracking = {
+            "orderId": order.get("id"),
+            "status": order.get("status", "Unknown"),
+            "carrier": order.get("carrier"),
+            "trackingNumber": order.get("tracking"),
+            "currentLocation": current_location,
         "estimatedDelivery": expected_delivery,
-        "lastUpdate": datetime.now().isoformat(),
+            "lastUpdate": datetime.now().isoformat(),
         "trackingHistory": history if history else [],
-    }
-
-    return tracking
+        }
+        
+        return tracking
 
 
 async def process_refund(order_id: Optional[str], reason: Optional[str] = None) -> Optional[Dict[str, Any]]:
